@@ -12,22 +12,26 @@
   - Единый cards.json для всех токенов (нет дубликатов)
   - Карты видны в имени токена (любой кошелек)
 
-### ⚠️ TOKEN-2022 IMPLEMENTATION (IN PROGRESS)
-- **Oracle structure:** Готова (IPFS hash storage)
-- **Fisher-Yates algorithm:** Готов
-- **Token-2022 mint:** TODO - заменить mint_fortune_nft.rs
-- **Name encoding:** TODO - "CyberDamus #AABBCC" logic
-- **Metadata Extension:** TODO - additional_metadata setup
-- **IPFS cards.json:** TODO - create structure
+### ✅ VANILLA SOLANA IMPLEMENTATION (COMPLETED 2025-10-06)
+- **Architecture:** Vanilla Solana (no Anchor Framework)
+- **Program size:** 123KB (vs 304KB Anchor - экономия 60%)
+- **Oracle structure:** ✅ Готова (IPFS hash storage, oracle-v2 seed)
+- **Fisher-Yates algorithm:** ✅ Реализован
+- **Token-2022 mint:** ✅ Client-side Keypair approach
+- **Name encoding:** ✅ Decimal format "CyberDamus #AABBCC" (не HEX!)
+- **SystemProgram CPI:** ✅ Fee transfer implemented
+- **Devnet deployment:** ✅ Program 2zmR8N51Q7KYZqnzJJWaJkM3wbxwBqj2gimNPf8Ldqu7
+- **Oracle PDA:** ✅ Gfmt7QNPu2iGf2Nugirg5hb1v2NnHXY1i1wLfwkUicsb
 
 ### 🎯 СЛЕДУЮЩИЕ ШАГИ
-- [ ] Создать cards.json с метаданными 78 карт
-- [ ] Загрузить 78 PNG файлов + cards.json на IPFS
-- [ ] Реализовать mint_fortune_token() с Token-2022
-- [ ] Написать тесты для Token-2022
-- [ ] Фаза 3: Frontend Development (парсинг имени)
-- [ ] Фаза 4: Тестирование на Devnet
-- [ ] Фаза 5: Mainnet Deployment
+- [x] ~~Реализовать mint_fortune_token() с Token-2022~~ ✅ DONE
+- [x] ~~Написать тесты для Token-2022~~ ✅ DONE (vanilla.test.ts)
+- [x] ~~Тестирование на Devnet~~ ✅ DONE (3 tokens minted)
+- [ ] **BLOCKER:** Создать 78 Tarot card PNG designs (0.png - 77.png)
+- [ ] Загрузить на IPFS и получить real CID
+- [ ] Пере-инициализировать Oracle с real IPFS hash
+- [ ] Frontend Development (парсинг decimal имени токенов)
+- [ ] Mainnet Deployment (upgradeable)
 
 ## 📌 КЛЮЧЕВЫЕ РЕШЕНИЯ
 ✅ **Архитектура:** Token-2022 с Metadata Extension (не NFT!)
@@ -102,13 +106,14 @@ Frontend обработка:
 4. Отображение: Past (0), Present (3), Future (77)
 ```
 
-## 💰 ЭКОНОМИКА ПРОЕКТА (Token-2022)
+## 💰 ЭКОНОМИКА ПРОЕКТА (Vanilla Solana + Token-2022)
 
 ### РАЗОВЫЕ ЗАТРАТЫ (при деплое):
 - Программа (BPF bytecode): 0.52 SOL ($104)
-  - Anchor версия с Token-2022: ~90KB
+  - **Vanilla Solana:** 123KB (экономия 60% vs Anchor)
   - Без Metaplex зависимостей: экономия -80KB
-- Oracle PDA (132 bytes): 0.003 SOL ($0.60)
+  - Без Anchor overhead: экономия -60KB
+- Oracle PDA (124 bytes): 0.003 SOL ($0.60)
 - **ИТОГО:** 0.523 SOL (~$104.60)
 
 ### СТОИМОСТЬ ОДНОГО TOKEN-2022:
@@ -141,89 +146,36 @@ Frontend обработка:
 3. Добавление Token-2022 зависимостей
 4. Конфигурация Cargo.toml с оптимизациями
 
-### ФАЗА 2: TOKEN-2022 MIGRATION (День 3-5) ⚠️ IN PROGRESS
-**TODO - Заменить mint_fortune_nft.rs:**
+### ФАЗА 2: VANILLA SOLANA MIGRATION (День 3-5) ✅ COMPLETED
+**Реализованная архитектура:**
 ```rust
-// Только 2 функции!
-pub fn initialize_oracle(ipfs_base_hash: [u8; 46])  // ✅ Готова - IPFS hash storage
-pub fn mint_fortune_token()                          // ⚠️ TODO - Token-2022 mint
-// УБРАЛИ: upload_cards(), update_fee(), rarity - не нужны!
+// Только 2 функции! (Vanilla Solana, no Anchor)
+pub fn process_initialize_oracle(ipfs_base_hash: [u8; 46])  // ✅ DONE
+pub fn process_mint_fortune_token()                          // ✅ DONE
+// УБРАЛИ: upload_cards(), update_fee(), rarity, Anchor, Metaplex
 ```
 
-**Что есть (из NFT implementation):**
-- ✅ Oracle структура (132 bytes)
+**Что реализовано:**
+- ✅ Oracle структура (124 bytes, no Anchor discriminator)
+- ✅ Oracle PDA seed: "oracle-v2" (избегает конфликта на devnet)
 - ✅ Fisher-Yates алгоритм для генерации уникальных карт
-- ✅ Все 78 названий карт Таро в get_card_name()
-- ✅ Transfer fee to treasury
+- ✅ Decimal encoding: format!("CyberDamus #{:02}{:02}{:02}")
+- ✅ Transfer fee to treasury через SystemProgram CPI
+- ✅ Client-side Keypair для mint accounts (не PDA)
+- ✅ Token-2022 mint initialization (spl_token_2022)
+- ✅ Program size: 123KB (экономия -60% vs Anchor)
 
-**Что нужно заменить:**
-- ⚠️ TODO: Заменить Metaplex на Token-2022 program
-- ⚠️ TODO: Encode cards в name: "CyberDamus #AABBCC"
-- ⚠️ TODO: Set additional_metadata: fortune_number
-- ⚠️ TODO: Удалить Master Edition/Collection код (не нужно!)
-- ⚠️ TODO: Исправить blockhash энтропию
-- ⚠️ TODO: Emergency pause механизм
+**Devnet тестирование:**
+- ✅ Deployed: 2zmR8N51Q7KYZqnzJJWaJkM3wbxwBqj2gimNPf8Ldqu7
+- ✅ Oracle: Gfmt7QNPu2iGf2Nugirg5hb1v2NnHXY1i1wLfwkUicsb
+- ✅ 3 Fortune Tokens заминтено успешно
+- ✅ Decimal формат проверен (#772337 в логах)
 
-**Anchor оптимизации (TODO):**
-```toml
-# Cargo.toml - агрессивные оптимизации
-[features]
-no-serde = []     # -15KB (минимальная сериализация)
-no-std = []       # -25KB (без стандартной библиотеки)
-no-idl = []       # -20KB (без интерфейса)
-no-log-ix-name = [] # -10KB (без логирования)
-
-[profile.release-optimized]
-strip = "symbols" # -10KB (убираем debug символы)
-panic = "abort"   # -5KB (без panic handling)
-opt-level = "z"   # Максимальная оптимизация размера
-lto = "fat"       # Link Time Optimization
-```
-
-### ФАЗА 2.5: ANCHOR → VANILLA SOLANA MIGRATION (День 6-10) - OPTIONAL
-**Цель:** Дальнейшая оптимизация размера программы с ~90KB до 60-80KB
-
-**Статус:** Рассматривается после успешного Token-2022 тестирования на devnet
-
-**План конвертации (если понадобится):**
-```rust
-// 1. Удалить все Anchor macros
-// 2. Заменить на чистый Solana Rust
-// 3. Ручная сериализация/десериализация
-// 4. Прямые CPI calls без Anchor wrapper
-
-// ДО (Anchor):
-#[program]
-pub mod cyberdamus_nft {
-    pub fn initialize_oracle(ctx: Context<InitializeOracle>, ...) -> Result<()>
-}
-
-// ПОСЛЕ (Vanilla Solana):
-pub fn process_instruction(
-    program_id: &Pubkey,
-    accounts: &[AccountInfo],
-    instruction_data: &[u8],
-) -> ProgramResult {
-    match instruction_data[0] {
-        0 => initialize_oracle(accounts, &instruction_data[1..]),
-        1 => mint_fortune_token(accounts, &instruction_data[1..]),
-        _ => Err(ProgramError::InvalidInstructionData),
-    }
-}
-```
-
-**Преимущества:**
-- Размер: 200KB → 60-80KB (-60-70%)
-- Gas: меньше compute units
-- Контроль: полный контроль над каждой операцией
-- Простота: всего 2 функции легко конвертировать
-
-**Недостатки:**
-- Время: +3-5 дней разработки
-- Тестирование: нужно переписать все тесты
-- Отладка: меньше автоматических проверок Anchor
-
-**Решение:** Конвертируем после успешного devnet тестирования Anchor версии
+**TypeScript клиент (vanilla-helper.ts):**
+- ✅ Oracle PDA derivation с "oracle-v2" seed
+- ✅ Client-side mint account creation
+- ✅ Borsh serialization для instruction data
+- ✅ SystemProgram.createAccount + mint instruction в одной tx
 
 ### ФАЗА 3: NFT МИНТИНГ (День 11-13)
 ```typescript
@@ -481,13 +433,14 @@ solana program set-upgrade-authority \
 
 ---
 *Документ создан: 2025-09-18*
-*Документ обновлен: 2025-10-02*
-*Версия: 1.3 - Devnet deployment status*
+*Последнее обновление: 2025-10-06*
+*Версия: 1.4 - Vanilla Solana migration completed*
 
-**Ключевые изменения v1.3:**
-- ✅ Devnet deployment completed
-- ✅ Program ID: `2zmR8N51Q7KYZqnzJJWaJkM3wbxwBqj2gimNPf8Ldqu7`
-- ✅ Oracle PDA: `22qT1BuA8LCXq3faEV3dbxmdmHAxwamTDFvVdsJ4eYxR`
-- ⚠️ IPFS hash placeholder identified - need real Tarot assets
-- ✅ Обновлен чеклист с текущим прогрессом
-- ✅ Приоритизированы следующие шаги (IPFS assets - blocker)
+**Ключевые изменения v1.4:**
+- ✅ **МИГРАЦИЯ ЗАВЕРШЕНА:** Anchor → Vanilla Solana
+- ✅ Program size: 304KB → 123KB (экономия 60%)
+- ✅ Oracle PDA seed: "oracle" → "oracle-v2" (devnet conflict fix)
+- ✅ Token name format: HEX → Decimal (#4D1725 → #772337)
+- ✅ 3 Fortune Tokens заминтено на devnet
+- ✅ Удалены obsolete файлы (Anchor.toml, old tests, old scripts)
+- ✅ Обновлена документация (decimal format)

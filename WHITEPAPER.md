@@ -34,8 +34,8 @@ CyberDamus - это первый полностью on-chain сервис гад
 
 **Token-2022 Metadata (каждый токен, ~103 bytes):**
 * `name`: "CyberDamus #AABBCC" (21 bytes)
-  - AA, BB, CC = ID карт в 2-значном формате (00-77)
-  - Пример: "#000377" = карты [0, 3, 77]
+  - AA, BB, CC = ID карт в **десятичном** 2-значном формате (00-77)
+  - Пример: "#000377" = карты [0, 3, 77] (decimal: 00, 03, 77)
 * `symbol`: "TAROT" (5 bytes)
 * `uri`: "ipfs://{CID}/cards.json" (40 bytes)
   - Единый JSON файл для ВСЕХ токенов
