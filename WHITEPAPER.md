@@ -22,7 +22,19 @@ CyberDamus - это первый полностью on-chain сервис гад
 
 🔮 2. ТЕХНИЧЕСКАЯ АРХИТЕКТУРА
 
-2.1 Token-2022 с Metadata Extension
+2.1 Token-2022 с Metadata Extension (РЕАЛИЗОВАНО ✅)
+
+**⚠️ CRITICAL:** Localhost test validator НЕ поддерживает CPI reallocation для Metadata Extension! Тестирование ТОЛЬКО на devnet/mainnet!
+
+**Status:** Полностью реализовано и протестировано на devnet
+- Deployed Program ID: `2zmR8N51Q7KYZqnzJJWaJkM3wbxwBqj2gimNPf8Ldqu7`
+- Oracle PDA (seed "oracle-v2"): `Gfmt7QNPu2iGf2Nugirg5hb1v2NnHXY1i1wLfwkUicsb`
+- Verified TX example: [AxCsTqRjpFeBibkUUWh7ErCK9LxUUjGsB92JECBUhfy7](https://explorer.solana.com/address/AxCsTqRjpFeBibkUUWh7ErCK9LxUUjGsB92JECBUhfy7?cluster=devnet)
+- Architecture: Vanilla Solana (no Anchor Framework)
+- Program size: 123KB (60% smaller than Anchor)
+
+**Wallet Display Note:** Most wallets (Phantom, Solflare) don't yet support Token-2022 Metadata Extension display, showing "Unknown Token" - but all metadata IS fully on-chain and queryable via RPC!
+
 Вместо NFT (Metaplex) используем Token-2022 с Metadata Extension:
 
 **Oracle Account (130 bytes):**
@@ -32,16 +44,26 @@ CyberDamus - это первый полностью on-chain сервис гад
 * Счетчик гаданий (8 bytes) - для нумерации токенов
 * Инициализация и резерв (12 bytes)
 
-**Token-2022 Metadata (каждый токен, ~103 bytes):**
-* `name`: "CyberDamus #AABBCC" (21 bytes)
+**Token-2022 Metadata Extension (каждый токен, ~250 bytes on-chain):**
+* **Metadata Extension fully on-chain** (stored directly in Mint account via TLV encoding)
+* `name`: "CyberDamus #AABBCC" (example: "CyberDamus #433323")
   - AA, BB, CC = ID карт в **десятичном** 2-значном формате (00-77)
-  - Пример: "#000377" = карты [0, 3, 77] (decimal: 00, 03, 77)
-* `symbol`: "TAROT" (5 bytes)
-* `uri`: "ipfs://{CID}/cards.json" (40 bytes)
-  - Единый JSON файл для ВСЕХ токенов
-* `additional_metadata`: (37 bytes)
-  - `fortune_number`: "377" (порядковый номер)
-* `freeze_authority`: None (токены нельзя заморозить)
+  - Пример: "#433323" = карты [43, 33, 23] (Past, Present, Future)
+* `symbol`: "TAROT" (visible in all Token-2022 compatible tools)
+* `uri`: "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3o/cards.json"
+  - Единый JSON файл для ВСЕХ токенов + logo image field
+* `additional_metadata`: Key-value pairs
+  - `fortune_number`: Порядковый номер (e.g., "4")
+* **MetadataPointer Extension:** Self-referencing (metadata stored in mint itself)
+* `mint_authority`: Oracle PDA (for minting)
+* `freeze_authority`: Oracle PDA (can be removed for immutability)
+
+**Technical Implementation Details:**
+* Client creates mint account with `space = 82 bytes` (Mint + MetadataPointer)
+* Client pre-funds with lamports for ~332 bytes (mint + metadata + safety margin)
+* Program initializes MetadataPointer → Mint → Metadata → UpdateField via CPI
+* Metadata Extension uses `alloc_and_serialize_variable_len_extension` internally
+* **CRITICAL:** CPI reallocation works ONLY on devnet/mainnet, NOT localhost!
 
 **IPFS структура (общая для всех токенов):**
 ```
@@ -56,6 +78,7 @@ ipfs://{CID}/
 **cards.json структура:**
 ```json
 {
+  "image": "ipfs://{CID}/cyberdamus_logo.png",
   "cards": [
     {"id": 0, "name": "The Fool", "image": "ipfs://{CID}/0.png"},
     {"id": 1, "name": "The Magician", "image": "ipfs://{CID}/1.png"},
@@ -64,6 +87,7 @@ ipfs://{CID}/
   ]
 }
 ```
+**Note:** Top-level `"image"` field required for wallet logo display (512x512 or 1024x1024 PNG)
 2.2 Генерация карт - Алгоритм "Виртуальной Колоды"
 Принцип работы:
 CyberDamus использует алгоритм виртуальной колоды, где каждая карта может быть вытянута только один раз за расклад, точно как в физическом гадании.

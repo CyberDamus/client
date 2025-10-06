@@ -12,16 +12,22 @@
   - Единый cards.json для всех токенов (нет дубликатов)
   - Карты видны в имени токена (любой кошелек)
 
-### ✅ VANILLA SOLANA IMPLEMENTATION (COMPLETED 2025-10-06)
+### ✅ VANILLA SOLANA + TOKEN-2022 METADATA EXTENSION (COMPLETED 2025-10-06)
 - **Architecture:** Vanilla Solana (no Anchor Framework)
 - **Program size:** 123KB (vs 304KB Anchor - экономия 60%)
 - **Oracle structure:** ✅ Готова (IPFS hash storage, oracle-v2 seed)
 - **Fisher-Yates algorithm:** ✅ Реализован
-- **Token-2022 mint:** ✅ Client-side Keypair approach
+- **Token-2022 Metadata Extension:** ✅ WORKING on devnet!
+  - MetadataPointer Extension ✅
+  - Metadata Extension (name, symbol, uri) ✅
+  - Additional metadata (fortune_number) ✅
+  - All metadata fully on-chain ✅
 - **Name encoding:** ✅ Decimal format "CyberDamus #AABBCC" (не HEX!)
 - **SystemProgram CPI:** ✅ Fee transfer implemented
 - **Devnet deployment:** ✅ Program 2zmR8N51Q7KYZqnzJJWaJkM3wbxwBqj2gimNPf8Ldqu7
 - **Oracle PDA:** ✅ Gfmt7QNPu2iGf2Nugirg5hb1v2NnHXY1i1wLfwkUicsb
+- **Verified Token:** ✅ AxCsTqRjpFeBibkUUWh7ErCK9LxUUjGsB92JECBUhfy7 (Fortune #4, Cards: [43,33,23])
+- **⚠️ CRITICAL:** Localhost test validator НЕ поддерживает CPI reallocation! Тестирование только на devnet/mainnet!
 
 ### 🎯 СЛЕДУЮЩИЕ ШАГИ
 - [x] ~~Реализовать mint_fortune_token() с Token-2022~~ ✅ DONE
@@ -73,19 +79,22 @@ pub struct Oracle {
 Доступ к метаданным: ipfs://{base_hash}/cards.json
 ```
 
-### 3. TOKEN-2022 СТРУКТУРА (новая)
+### 3. TOKEN-2022 METADATA EXTENSION СТРУКТУРА ✅ РЕАЛИЗОВАНО
 ```
-On-chain хранится (Metadata Extension, ~103 bytes):
-- name: "CyberDamus #AABBCC"  (21 bytes)
-  где AA, BB, CC = 2-значные ID карт (00-77)
-  Пример: "#000377" = карты [0, 3, 77]
-- symbol: "TAROT"  (5 bytes)
-- uri: "ipfs://{CID}/cards.json"  (40 bytes)
-- additional_metadata: [("fortune_number", "377")]  (37 bytes)
-- freeze_authority: None
+On-chain хранится (Metadata Extension, ~250 bytes в Mint Account):
+- MetadataPointer Extension: Self-referencing (metadata в самом минте)
+- name: "CyberDamus #433323"  (пример реального токена)
+  где 43, 33, 23 = 2-значные decimal ID карт (00-77)
+  Пример: "#433323" = карты [43, 33, 23] (Past, Present, Future)
+- symbol: "TAROT"  (visible in Token-2022 compatible tools)
+- uri: "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3o/cards.json"
+- additional_metadata: [("fortune_number", "4")]  (порядковый номер)
+- mint_authority: Oracle PDA (for minting)
+- freeze_authority: Oracle PDA (can be removed for immutability)
 
 cards.json на IPFS (общий для всех токенов):
 {
+  "image": "ipfs://{CID}/cyberdamus_logo.png",  // Top-level logo для кошельков
   "cards": [
     {"id": 0, "name": "The Fool", "image": "ipfs://{CID}/0.png"},
     {"id": 1, "name": "The Magician", "image": "ipfs://{CID}/1.png"},
@@ -95,15 +104,33 @@ cards.json на IPFS (общий для всех токенов):
 }
 
 Компоненты Token-2022:
-- Mint Account (Token-2022 + Metadata Extension, supply=1, decimals=0)
-- Token Account (владение пользователя)
-- Metadata встроена в Mint Account (не отдельный аккаунт!)
+- Mint Account (~332 bytes):
+  - Base Mint (82 bytes)
+  - MetadataPointer Extension (~8 bytes)
+  - Metadata Extension (~250 bytes) - TLV encoding
+- Token Account (ATA, владение пользователя)
+- ⚠️ Metadata встроена в Mint Account (не отдельный PDA!)
+
+Техническая реализация:
+1. Client создает mint account: space=82 bytes, lamports для ~332 bytes
+2. Program инициализирует MetadataPointer (BEFORE mint init!)
+3. Program инициализирует Mint (initialize_mint2)
+4. Program инициализирует Metadata Extension (CPI reallocation!)
+5. Program добавляет fortune_number в additional_metadata
 
 Frontend обработка:
-1. Парсинг name: "CyberDamus #000377" → [0, 3, 77]
+1. Парсинг name: "CyberDamus #433323" → [43, 33, 23]
 2. Fetch cards.json по uri
-3. Фильтрация: cards.filter(c => [0,3,77].includes(c.id))
-4. Отображение: Past (0), Present (3), Future (77)
+3. Фильтрация: cards.filter(c => [43,33,23].includes(c.id))
+4. Отображение: Past (43), Present (33), Future (23)
+
+Verified Example (Devnet):
+- Mint: AxCsTqRjpFeBibkUUWh7ErCK9LxUUjGsB92JECBUhfy7
+- Name: "CyberDamus #433323"
+- Symbol: "TAROT"
+- Cards: [43, 33, 23]
+- Fortune #: 4
+- Explorer: https://explorer.solana.com/address/AxCsTqRjpFeBibkUUWh7ErCK9LxUUjGsB92JECBUhfy7?cluster=devnet
 ```
 
 ## 💰 ЭКОНОМИКА ПРОЕКТА (Vanilla Solana + Token-2022)
@@ -146,10 +173,10 @@ Frontend обработка:
 3. Добавление Token-2022 зависимостей
 4. Конфигурация Cargo.toml с оптимизациями
 
-### ФАЗА 2: VANILLA SOLANA MIGRATION (День 3-5) ✅ COMPLETED
+### ФАЗА 2: VANILLA SOLANA + TOKEN-2022 METADATA EXTENSION (День 3-5) ✅ COMPLETED
 **Реализованная архитектура:**
 ```rust
-// Только 2 функции! (Vanilla Solana, no Anchor)
+// Только 2 функции! (Vanilla Solana, no Anchor, no Metaplex)
 pub fn process_initialize_oracle(ipfs_base_hash: [u8; 46])  // ✅ DONE
 pub fn process_mint_fortune_token()                          // ✅ DONE
 // УБРАЛИ: upload_cards(), update_fee(), rarity, Anchor, Metaplex
@@ -162,20 +189,28 @@ pub fn process_mint_fortune_token()                          // ✅ DONE
 - ✅ Decimal encoding: format!("CyberDamus #{:02}{:02}{:02}")
 - ✅ Transfer fee to treasury через SystemProgram CPI
 - ✅ Client-side Keypair для mint accounts (не PDA)
-- ✅ Token-2022 mint initialization (spl_token_2022)
+- ✅ **Token-2022 Metadata Extension ПОЛНОСТЬЮ РЕАЛИЗОВАНО:**
+  - ✅ MetadataPointer Extension initialization
+  - ✅ Mint initialization (initialize_mint2)
+  - ✅ Metadata Extension (name, symbol, uri) via CPI
+  - ✅ Additional metadata (fortune_number) via UpdateField
+  - ✅ All metadata fully on-chain in Mint account
 - ✅ Program size: 123KB (экономия -60% vs Anchor)
 
 **Devnet тестирование:**
 - ✅ Deployed: 2zmR8N51Q7KYZqnzJJWaJkM3wbxwBqj2gimNPf8Ldqu7
 - ✅ Oracle: Gfmt7QNPu2iGf2Nugirg5hb1v2NnHXY1i1wLfwkUicsb
-- ✅ 3 Fortune Tokens заминтено успешно
-- ✅ Decimal формат проверен (#772337 в логах)
+- ✅ 4 Fortune Tokens заминтено успешно с Metadata Extension
+- ✅ Decimal формат проверен (#433323 в реальном токене)
+- ✅ Verified example: AxCsTqRjpFeBibkUUWh7ErCK9LxUUjGsB92JECBUhfy7
+- ⚠️ **CRITICAL:** Localhost НЕ поддерживает CPI reallocation!
 
 **TypeScript клиент (vanilla-helper.ts):**
 - ✅ Oracle PDA derivation с "oracle-v2" seed
-- ✅ Client-side mint account creation
+- ✅ Client-side mint account creation с pre-funding для metadata
 - ✅ Borsh serialization для instruction data
 - ✅ SystemProgram.createAccount + mint instruction в одной tx
+- ✅ Conservative metadata space (1000 bytes) для безопасности
 
 ### ФАЗА 3: NFT МИНТИНГ (День 11-13)
 ```typescript
@@ -434,13 +469,26 @@ solana program set-upgrade-authority \
 ---
 *Документ создан: 2025-09-18*
 *Последнее обновление: 2025-10-06*
-*Версия: 1.4 - Vanilla Solana migration completed*
+*Версия: 1.5 - Token-2022 Metadata Extension WORKING*
 
-**Ключевые изменения v1.4:**
-- ✅ **МИГРАЦИЯ ЗАВЕРШЕНА:** Anchor → Vanilla Solana
+**Ключевые изменения v1.5:**
+- ✅ **TOKEN-2022 METADATA EXTENSION ПОЛНОСТЬЮ РЕАЛИЗОВАНО:**
+  - MetadataPointer Extension ✅
+  - Metadata Extension (name, symbol, uri) ✅
+  - Additional metadata (fortune_number) ✅
+  - All metadata fully on-chain ✅
+- ✅ **Verified on devnet:** AxCsTqRjpFeBibkUUWh7ErCK9LxUUjGsB92JECBUhfy7
+- ✅ **4 Fortune Tokens** заминтено успешно с полными метаданными
+- ⚠️ **CRITICAL DISCOVERY:** Localhost test validator НЕ поддерживает CPI reallocation!
+  - Error: "Failed to reallocate account data" (only on localhost)
+  - Solution: ВСЕГДА тестировать на devnet/mainnet
+- ✅ **Client pre-funding:** Mint account pre-funded with lamports for reallocation
+- ✅ **Wallet display note:** Most wallets don't yet support Token-2022 Metadata Extension
+  - Show "Unknown Token" - это временное ограничение wallet software
+  - Metadata IS fully on-chain and queryable via RPC/Explorer
+
+**Изменения v1.4 (предыдущая версия):**
+- ✅ МИГРАЦИЯ: Anchor → Vanilla Solana
 - ✅ Program size: 304KB → 123KB (экономия 60%)
 - ✅ Oracle PDA seed: "oracle" → "oracle-v2" (devnet conflict fix)
-- ✅ Token name format: HEX → Decimal (#4D1725 → #772337)
-- ✅ 3 Fortune Tokens заминтено на devnet
-- ✅ Удалены obsolete файлы (Anchor.toml, old tests, old scripts)
-- ✅ Обновлена документация (decimal format)
+- ✅ Token name format: HEX → Decimal (#4D1725 → #433323)
