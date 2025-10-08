@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 270 70% 5%; /* #0a0118 */
+    --foreground: 210 40% 98%;
+
+    --card: 270 50% 12%; /* #1a0f2e */
+    --card-foreground: 210 40% 98%;
+
+    --popover: 270 50% 12%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 262 83% 58%; /* #8b5cf6 */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 270 50% 15%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 270 30% 20%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 330 81% 60%; /* #ec4899 */
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 270 30% 20%;
+    --input: 270 30% 20%;
+    --ring: 262 83% 58%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-cyber-bg text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom scrollbar for cyberpunk theme */
+@layer utilities {
+  /* Webkit browsers (Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-cyber-surface;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-cyber-primary rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-cyber-accent;
+  }
+
+  /* Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #8b5cf6 #1a0f2e;
+  }
+}
+
+/* Glitch text effect */
+@layer utilities {
+  .text-glitch {
+    position: relative;
+    animation: glitch 1s infinite;
+  }
+
+  @keyframes glitch {
+    0%, 100% {
+      text-shadow: 0 0 0 transparent;
+    }
+    25% {
+      text-shadow: -2px 0 0 #06b6d4, 2px 0 0 #ec4899;
+    }
+    50% {
+      text-shadow: 2px 0 0 #06b6d4, -2px 0 0 #ec4899;
+    }
+    75% {
+      text-shadow: -2px 0 0 #ec4899, 2px 0 0 #06b6d4;
+    }
+  }
+}
+
+/* Floating animation */
+@layer utilities {
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+}
+
+/* Glow effect */
+@layer utilities {
+  .glow-text {
+    text-shadow: 0 0 20px rgba(139, 92, 246, 0.8),
+                 0 0 40px rgba(139, 92, 246, 0.6),
+                 0 0 60px rgba(139, 92, 246, 0.4);
+  }
+
+  .glow-border {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.6);
+  }
+}
