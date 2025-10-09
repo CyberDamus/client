@@ -1,0 +1,15 @@
+# Independent projects (separate git repos)
+cyberdamus_nft/
+client/
+
+# Large media files
+Cards/
+
+# IDE and local configs
+.claude/
+.DS_Store
+.vscode/
+
+# Temporary files
+*.log
+*.tmp
