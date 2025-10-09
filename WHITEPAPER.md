@@ -26,35 +26,42 @@ CyberDamus - это первый полностью on-chain сервис гад
 
 **⚠️ CRITICAL:** Localhost test validator НЕ поддерживает CPI reallocation для Metadata Extension! Тестирование ТОЛЬКО на devnet/mainnet!
 
-**Status:** Полностью реализовано и протестировано на devnet
+**Status:** Полностью реализовано и протестировано на devnet (2025-10-09)
 - Deployed Program ID: `2zmR8N51Q7KYZqnzJJWaJkM3wbxwBqj2gimNPf8Ldqu7`
-- Oracle PDA (seed "oracle-v2"): `Gfmt7QNPu2iGf2Nugirg5hb1v2NnHXY1i1wLfwkUicsb`
-- Verified TX example: [AxCsTqRjpFeBibkUUWh7ErCK9LxUUjGsB92JECBUhfy7](https://explorer.solana.com/address/AxCsTqRjpFeBibkUUWh7ErCK9LxUUjGsB92JECBUhfy7?cluster=devnet)
-- Architecture: Vanilla Solana (no Anchor Framework)
-- Program size: 123KB (60% smaller than Anchor)
+- Oracle PDA (seed "oracle-v4"): `8kG6NL5QmkoGALS31cgu7rnmz2hitDqTzaP6RGbJJEsn`
+- Collection Mint (seed "collection-v3"): `7vUvHhg3PSYgk2spoNydB6YhhpkPEWS3vQhj8b1gSogb`
+- Verified Token: [8KtafmqDnH4QkaK6gwSaCDLumwJgU2rwnRrfb2UqZsyF](https://solana.fm/address/8KtafmqDnH4QkaK6gwSaCDLumwJgU2rwnRrfb2UqZsyF?cluster=devnet-solana)
+- Architecture: Vanilla Solana + Collection (TokenGroup extension)
+- Program size: 175KB (179,272 bytes) - optimized with Collection support
 
 **Wallet Display Note:** Most wallets (Phantom, Solflare) don't yet support Token-2022 Metadata Extension display, showing "Unknown Token" - but all metadata IS fully on-chain and queryable via RPC!
 
 Вместо NFT (Metaplex) используем Token-2022 с Metadata Extension:
 
-**Oracle Account (130 bytes):**
+**Oracle Account (148 bytes):**
 * Базовый IPFS хеш директории (46 bytes) - один хеш для всех карт
 * Authority адрес (32 bytes) - администратор системы
 * Treasury адрес (32 bytes) - кошелек для сбора комиссий
+* Collection Mint адрес (32 bytes) - адрес Collection NFT
 * Счетчик гаданий (8 bytes) - для нумерации токенов
-* Инициализация и резерв (12 bytes)
+* Инициализация и резерв (6 bytes)
 
-**Token-2022 Metadata Extension (каждый токен, ~250 bytes on-chain):**
+**Token-2022 Metadata Extension (каждый токен, ~234 bytes on-chain):**
 * **Metadata Extension fully on-chain** (stored directly in Mint account via TLV encoding)
-* `name`: "CyberDamus #AABBCC" (example: "CyberDamus #433323")
-  - AA, BB, CC = ID карт в **десятичном** 2-значном формате (00-77)
-  - Пример: "#433323" = карты [43, 33, 23] (Past, Present, Future)
+* `name`: "CyberDamus #AAoAAoAAo" (example: "CyberDamus #19i20!07i")
+  - AA = ID карты в **десятичном** 2-значном формате (00-77)
+  - o = Ориентация: `i` (inverted - перевернутая) или `!` (upright - нормальная)
+  - Пример: "#19i20!07i" = карты [19 inverted, 20 upright, 7 inverted]
 * `symbol`: "TAROT" (visible in all Token-2022 compatible tools)
 * `uri`: "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3o/cards.json"
   - Единый JSON файл для ВСЕХ токенов + logo image field
 * `additional_metadata`: Key-value pairs
-  - `fortune_number`: Порядковый номер (e.g., "4")
+  - `fortune_number`: Порядковый номер (e.g., "2")
+  - `past`: ID + ориентация (e.g., "19i")
+  - `present`: ID + ориентация (e.g., "20!")
+  - `future`: ID + ориентация (e.g., "07i")
 * **MetadataPointer Extension:** Self-referencing (metadata stored in mint itself)
+* **GroupPointer Extension:** Points to Collection Mint (7vUvHhg3PSYgk2spoNydB6YhhpkPEWS3vQhj8b1gSogb)
 * `mint_authority`: Oracle PDA (for minting)
 * `freeze_authority`: Oracle PDA (can be removed for immutability)
 
@@ -200,11 +207,12 @@ BLOCKCHAIN
 Процесс занимает ~400-1000ms в зависимости от сложности инструкции.
 2.6 Архитектурные преимущества Token-2022
 **Минимализм кода:**
-* 2 функции: initialize_oracle, mint_fortune_token
-* 1 PDA аккаунт (только Oracle)
-* 132 bytes Oracle + 103 bytes per token
+* 3 функции: initialize_oracle, initialize_collection, mint_fortune_token
+* 2 PDA аккаунта (Oracle + Collection Mint)
+* 148 bytes Oracle + 318 bytes Collection + ~234 bytes per token
 * Нет сложной логики upload_cards и update_fee
 * Нет Metaplex зависимостей
+* Collection support через TokenGroup extension
 
 **Компоненты Token-2022:**
 * Mint Account - Token-2022 с Metadata Extension (supply = 1, decimals = 0)
@@ -213,12 +221,12 @@ BLOCKCHAIN
 * No freeze authority - токены нельзя заморозить
 
 **Экономические выгоды:**
-* Деплой: 0.523 SOL (оптимизированная программа)
-* Per-token cost: 0.0057 SOL (vs 0.0175 SOL для NFT)
-* Экономия 67% на каждом минте!
-* Окупаемость: 12 токенов (vs 17 NFT)
-* Чистая прибыль: 0.0443 SOL с токена (~$8.86)
-* ROI: 777% на каждом токене!
+* Деплой: ~1.257 SOL (с Collection support)
+* Per-token cost: 0.01156 SOL (vs ~0.0655 SOL для Metaplex NFT)
+* Экономия 67% на каждом минте vs Metaplex!
+* Окупаемость: 126 токенов
+* Treasury накопление: 0.01 SOL с токена (~$2)
+* ROI @ 1000 tokens: 795% (10 SOL treasury vs 1.257 SOL deployment)
 
 **Техническая элегантность:**
 * Нет stack overflow проблем (убрали большие массивы)
@@ -235,28 +243,28 @@ BLOCKCHAIN
 💰 3. ЭКОНОМИЧЕСКАЯ МОДЕЛЬ
 3.1 Стоимость развертывания (разовая)
 Компонент    Размер    Стоимость    Назначение
-Программа (BPF bytecode)    148KB    0.52 SOL (~$104)    Rent-exempt навсегда
-Oracle PDA    130 bytes    0.003 SOL (~$0.60)    Конфигурация системы
-ИТОГО        0.523 SOL (~$104.60)    Полная стоимость деплоя
+Программа (BPF bytecode)    175KB (179,272 bytes)    ~1.25 SOL (~$250)    Rent-exempt навсегда
+Oracle PDA    148 bytes    ~0.00218 SOL (~$0.44)    Конфигурация системы + collection_mint
+Collection Mint PDA    318 bytes    ~0.00235 SOL (~$0.47)    TokenGroup extension для Collection
+ИТОГО        ~1.257 SOL (~$251)    Полная стоимость деплоя
 
 3.2 Стоимость каждого Token-2022
 Компонент    Стоимость    Назначение
-Mint Account    0.002 SOL (~$0.40)    Token-2022 с Metadata Extension
-Metadata Extension    0.0012 SOL (~$0.24)    ~103 bytes (name, symbol, uri, additional_metadata)
-Token Account    0.002 SOL (~$0.40)    Владение токеном
-Transaction fees    0.0005 SOL (~$0.10)    Комиссии сети
-ИТОГО    0.0057 SOL (~$1.14)    Себестоимость токена
+Mint Account (with extensions)    ~0.00948 SOL (~$1.90)    Token-2022 (~234 bytes: Mint + MetadataPointer + GroupPointer + Metadata)
+Token Account (ATA)    0.00207 SOL (~$0.41)    Владение токеном (170 bytes)
+Transaction fees    0.00001 SOL (~$0.002)    Комиссии сети
+ИТОГО    ~0.01156 SOL (~$2.31)    Себестоимость токена
 
 3.3 Стоимость для пользователя
 Компонент    Стоимость    Назначение
-Комиссия оракула    0.05 SOL (~$10)    Доход проекта
-Покрытие Token-2022 минта    0.0057 SOL (~$1.14)    Создание токена
-Gas fee    ~0.0005 SOL (~$0.10)    Сеть Solana
-ИТОГО    ~0.0562 SOL (~$11.24)    Полная стоимость
+Комиссия оракула    0.01 SOL (~$2)    Доход в treasury (фиксированная)
+Покрытие Token-2022 минта    0.01156 SOL (~$2.31)    Создание токена (rent-exempt)
+Gas fee    0.00001 SOL (~$0.002)    Сеть Solana
+ИТОГО    ~0.02157 SOL (~$4.31 @ $200/SOL)    Полная стоимость
 
 3.4 Фиксированные параметры
 Комиссия оракула:
-* Фиксированная: 0.05 SOL (hardcoded в коде)
+* Фиксированная: 0.01 SOL (hardcoded в коде как PEOPLE_FEE)
 * Изменение: Только через program upgrade (первый год)
 * После года: Программа становится immutable навсегда
 * Прозрачность: Пользователь видит сумму перед подтверждением
@@ -264,16 +272,18 @@ Treasury кошелек:
 * Фиксированный при инициализации
 * Изменение: Только через program upgrade
 * После immutable: Невозможно изменить
-3.5 Экономика проекта (Token-2022)
-Прибыльность:
-* Чистая прибыль с токена: 0.05 SOL - 0.0057 SOL = 0.0443 SOL (~$8.86)
-* Точка безубыточности: 0.523 SOL / 0.0443 SOL = **12 токенов**
-* После 100 токенов: 4.43 SOL - 0.523 SOL = **3.90 SOL прибыли (~$780)**
-* После 1000 токенов: 44.3 SOL - 0.523 SOL = **43.77 SOL прибыли (~$8,754)**
-* ROI: **777%** на каждом токене!
+3.5 Экономика проекта (Token-2022 + Collection)
+Treasury накопление:
+* Доход в treasury с каждого токена: 0.01 SOL (~$2)
+* Затраты пользователя на storage: 0.01156 SOL (rent-exempt mint + ATA)
+* Бизнес-модель: Treasury растет, пользователи оплачивают собственный storage
+* Точка безубыточности: 1.257 SOL / 0.01 SOL = **126 токенов**
+* После 100 токенов: 1.0 SOL в treasury = **99% deployment cost recovered**
+* После 500 токенов: 5.0 SOL в treasury = **398% ROI**
+* После 1000 токенов: 10.0 SOL в treasury = **795% ROI**
 
 3.6 Распределение доходов
-100% комиссии (0.05 SOL) распределяется:
+100% комиссии (0.01 SOL) распределяется:
 ├── 40% - Разработка и поддержка инфраструктуры
 ├── 30% - Маркетинг и развитие сообщества
 ├── 20% - Резервный фонд (безопасность, аудиты)
@@ -283,10 +293,10 @@ Treasury кошелек:
 4.1 Принцип экономического барьера
 В CyberDamus нет искусственных временных ограничений на создание NFT. Защита от злоупотреблений обеспечивается естественным образом:
 Экономический барьер:
-* Каждое гадание стоит 0.068 SOL (~$13.60)
+* Каждое гадание стоит 0.02157 SOL (~$4.31 @ $200/SOL)
 * Спамить экономически нецелесообразно
-* 100 гаданий = 6.8 SOL ($1,360)
-* 1000 гаданий = 68 SOL ($13,600)
+* 100 гаданий = 2.157 SOL (~$431)
+* 1000 гаданий = 21.57 SOL (~$4,314)
 Философия свободы:
 * Пользователь сам решает, сколько гаданий ему нужно
 * Оплата = естественный регулятор частоты
@@ -508,19 +518,21 @@ Phase 7: Legacy (Год 3+) 🏛️
 
 📊 8. МЕТРИКИ И KPI
 Технические параметры:
-* Размер программы: 60-80KB (финал после vanilla Solana, -87% от Anchor)
-* On-chain данные: 132 bytes (вместо 6,248 bytes)
-* Количество функций: 2 (initialize_oracle, mint_fortune_nft)
-* Стоимость деплоя: 0.523 SOL ($104.60)
+* Размер программы: 175KB (179,272 bytes) - Vanilla Solana + Collection
+* On-chain данные Oracle: 148 bytes (с полем collection_mint)
+* On-chain данные Collection: 318 bytes (GroupPointer + TokenGroup extension)
+* On-chain данные per token: ~234 bytes (Mint + Extensions + Metadata)
+* Количество функций: 3 (initialize_oracle, initialize_collection, mint_fortune_token)
+* Стоимость деплоя: ~1.257 SOL (~$251)
 * Время транзакции: 400-1000ms
-* Collection: "CyberDamus Tarot"
+* Collection: "CyberDamus Oracle"
 * Symbol: "TAROT"
 Экономические показатели:
-* Себестоимость NFT: 0.0175 SOL ($3.50)
-* Цена для пользователя: 0.068 SOL ($13.60)
-* Чистая прибыль: 0.0325 SOL ($6.50)
-* ROI: 265% на каждом NFT
-* Окупаемость: после 17 NFT
+* Себестоимость токена: 0.01156 SOL (~$2.31)
+* Цена для пользователя: 0.02157 SOL (~$4.31 @ $200/SOL)
+* Доход в treasury: 0.01 SOL (~$2) per token
+* Окупаемость: после 126 токенов
+* ROI @ 1000 tokens: 795%
 Краткосрочные цели (3 месяца)
 * 10,000 уникальных NFT
 * 1,000 уникальных кошельков
@@ -585,14 +597,22 @@ CyberDamus создает мост между тысячелетней мудр�
 * GitHub: github.com/cyberdamus
 
 © 2025 CyberDamus Project. Built with 🔮 on Solana.
-Version 3.0 - Final architecture and branding
+Version 4.0 - Token-2022 with Collection + Orientation (2025-10-09)
 
-Обновления в версии 3.0:
-* ✅ Уточнена IPFS структура: NFT содержит ссылки на 3 карты, не композит
-* ✅ Добавлен Master Edition Account для поддержки маркетплейсов
-* ✅ Убрана система rate limits: экономический барьер вместо искусственных ограничений
-* ✅ Добавлена Phase 2.5: Anchor → Vanilla Solana migration
-* ✅ Финальный размер программы: 60-80KB (вместо 200KB)
-* ✅ Обновлена экономика с учетом Master Edition
-* ✅ Брендинг: Collection "CyberDamus Tarot", Symbol "TAROT"
-* ✅ Домен: cyberdamus.com (обоснование выбора .com)
+Обновления в версии 4.0 (2025-10-09):
+* ✅ **Collection support:** TokenGroup extension на Collection Mint
+* ✅ **Oracle v4:** seed "oracle-v4", 148 bytes (добавлено поле collection_mint)
+* ✅ **Collection Mint v3:** seed "collection-v3", 318 bytes (GroupPointer + TokenGroup)
+* ✅ **Token Extensions оптимизированы:** MetadataPointer + GroupPointer (NO GroupMemberPointer)
+* ✅ **TokenGroupMember удален:** фиксирует парсинг SolanaFM для Token Metadata Extension
+* ✅ **Ориентация карт:** формат name "#AAoAAoAAo" (o = i/! для inverted/upright)
+* ✅ **Additional metadata:** добавлены поля past, present, future с ориентацией
+* ✅ **Program size:** 175KB (179,272 bytes) - оптимизировано с Collection support
+* ✅ **Devnet status:** 2 Fortune Tokens minted, Token Metadata Extension visible on SolanaFM ✅
+* ✅ **Экономика обновлена:** 0.02156 SOL per mint, treasury accumulation model
+* ✅ **Verified:** https://solana.fm/address/8KtafmqDnH4QkaK6gwSaCDLumwJgU2rwnRrfb2UqZsyF
+
+Предыдущие версии:
+* v3.0: Anchor → Vanilla Solana migration, decimal name format
+* v2.0: Token-2022 Metadata Extension implementation
+* v1.0: Initial Metaplex NFT architecture (deprecated)

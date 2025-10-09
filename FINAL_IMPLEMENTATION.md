@@ -12,21 +12,25 @@
   - Единый cards.json для всех токенов (нет дубликатов)
   - Карты видны в имени токена (любой кошелек)
 
-### ✅ VANILLA SOLANA + TOKEN-2022 METADATA EXTENSION (COMPLETED 2025-10-06)
-- **Architecture:** Vanilla Solana (no Anchor Framework)
-- **Program size:** 123KB (vs 304KB Anchor - экономия 60%)
-- **Oracle structure:** ✅ Готова (IPFS hash storage, oracle-v2 seed)
-- **Fisher-Yates algorithm:** ✅ Реализован
-- **Token-2022 Metadata Extension:** ✅ WORKING on devnet!
+### ✅ VANILLA SOLANA + TOKEN-2022 + COLLECTION (COMPLETED 2025-10-09)
+- **Architecture:** Vanilla Solana + Collection (TokenGroup extension)
+- **Program size:** 175KB (179,272 bytes) - optimized with Collection support
+- **Oracle structure:** ✅ v4 (IPFS hash storage, collection_mint field, oracle-v4 seed)
+- **Collection Mint:** ✅ v3 (TokenGroup extension, collection-v3 seed)
+- **Fisher-Yates algorithm:** ✅ Реализован с ориентацией карт
+- **Token-2022 Extensions:** ✅ WORKING on devnet!
   - MetadataPointer Extension ✅
+  - GroupPointer Extension ✅ (NO GroupMemberPointer!)
   - Metadata Extension (name, symbol, uri) ✅
-  - Additional metadata (fortune_number) ✅
+  - Additional metadata (fortune_number, past, present, future) ✅
   - All metadata fully on-chain ✅
-- **Name encoding:** ✅ Decimal format "CyberDamus #AABBCC" (не HEX!)
+- **Name encoding:** ✅ Decimal format with orientation "CyberDamus #AAoAAoAAo" (o = i/!)
 - **SystemProgram CPI:** ✅ Fee transfer implemented
 - **Devnet deployment:** ✅ Program 2zmR8N51Q7KYZqnzJJWaJkM3wbxwBqj2gimNPf8Ldqu7
-- **Oracle PDA:** ✅ Gfmt7QNPu2iGf2Nugirg5hb1v2NnHXY1i1wLfwkUicsb
-- **Verified Token:** ✅ AxCsTqRjpFeBibkUUWh7ErCK9LxUUjGsB92JECBUhfy7 (Fortune #4, Cards: [43,33,23])
+- **Oracle PDA (v4):** ✅ 8kG6NL5QmkoGALS31cgu7rnmz2hitDqTzaP6RGbJJEsn
+- **Collection Mint (v3):** ✅ 7vUvHhg3PSYgk2spoNydB6YhhpkPEWS3vQhj8b1gSogb
+- **Verified Token:** ✅ 8KtafmqDnH4QkaK6gwSaCDLumwJgU2rwnRrfb2UqZsyF (Fortune #2, Cards: [19i, 20!, 07i])
+- **Token Metadata Extension:** ✅ Visible on SolanaFM (fixed by removing TokenGroupMember)
 - **⚠️ CRITICAL:** Localhost test validator НЕ поддерживает CPI reallocation! Тестирование только на devnet/mainnet!
 
 ### 🎯 СЛЕДУЮЩИЕ ШАГИ
@@ -50,18 +54,21 @@
 
 ## 🏗️ АРХИТЕКТУРА
 
-### 1. ORACLE STRUCTURE (без изменений)
+### 1. ORACLE STRUCTURE (updated v4)
 ```rust
-// Единственная структура данных
+// Oracle v4 with collection_mint field
 pub struct Oracle {
     authority: Pubkey,              // 32 bytes - администратор
     treasury: Pubkey,               // 32 bytes - кошелек комиссий
     total_fortunes: u64,            // 8 bytes - счетчик токенов
     ipfs_base_hash: [u8; 46],       // 46 bytes - базовый IPFS хеш
-    is_initialized: bool,           // 1 byte - флаг
+    collection_mint: Pubkey,        // 32 bytes - адрес Collection Mint
+    is_initialized: u8,             // 1 byte - флаг
     reserved: [u8; 5],              // 5 bytes - резерв
-    total_size: 132 bytes           // Общий размер (8 discriminator + 124)
+    total_size: 148 bytes           // Общий размер (no discriminator in Vanilla Solana)
 }
+// Seed: "oracle-v4"
+// PDA: 8kG6NL5QmkoGALS31cgu7rnmz2hitDqTzaP6RGbJJEsn
 ```
 
 ### 2. IPFS СТРУКТУРА (новая)
@@ -81,14 +88,20 @@ pub struct Oracle {
 
 ### 3. TOKEN-2022 METADATA EXTENSION СТРУКТУРА ✅ РЕАЛИЗОВАНО
 ```
-On-chain хранится (Metadata Extension, ~250 bytes в Mint Account):
+On-chain хранится (Metadata Extension, ~234 bytes в Mint Account):
 - MetadataPointer Extension: Self-referencing (metadata в самом минте)
-- name: "CyberDamus #433323"  (пример реального токена)
-  где 43, 33, 23 = 2-значные decimal ID карт (00-77)
-  Пример: "#433323" = карты [43, 33, 23] (Past, Present, Future)
+- GroupPointer Extension: Points to Collection Mint (7vUvHhg3PSYgk2spoNydB6YhhpkPEWS3vQhj8b1gSogb)
+- name: "CyberDamus #19i20!07i"  (пример реального токена)
+  где AA = 2-значные decimal ID карт (00-77)
+  где o = ориентация: i (inverted) или ! (upright)
+  Пример: "#19i20!07i" = карты [19 inverted, 20 upright, 7 inverted]
 - symbol: "TAROT"  (visible in Token-2022 compatible tools)
 - uri: "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3o/cards.json"
-- additional_metadata: [("fortune_number", "4")]  (порядковый номер)
+- additional_metadata:
+  [("fortune_number", "2"),
+   ("past", "19i"),
+   ("present", "20!"),
+   ("future", "07i")]
 - mint_authority: Oracle PDA (for minting)
 - freeze_authority: Oracle PDA (can be removed for immutability)
 
@@ -136,34 +149,38 @@ Verified Example (Devnet):
 ## 💰 ЭКОНОМИКА ПРОЕКТА (Vanilla Solana + Token-2022)
 
 ### РАЗОВЫЕ ЗАТРАТЫ (при деплое):
-- Программа (BPF bytecode): 0.52 SOL ($104)
-  - **Vanilla Solana:** 123KB (экономия 60% vs Anchor)
+- Программа (BPF bytecode): ~1.25 SOL ($250)
+  - **Vanilla Solana:** 175KB (179,272 bytes) with Collection support
   - Без Metaplex зависимостей: экономия -80KB
   - Без Anchor overhead: экономия -60KB
-- Oracle PDA (124 bytes): 0.003 SOL ($0.60)
-- **ИТОГО:** 0.523 SOL (~$104.60)
+- Oracle PDA (148 bytes): ~0.00218 SOL ($0.44)
+- Collection Mint PDA (318 bytes): ~0.00235 SOL ($0.47)
+  - Base Mint (82) + GroupPointer (64) + TokenGroup (172)
+- **ИТОГО:** ~1.257 SOL (~$251)
 
 ### СТОИМОСТЬ ОДНОГО TOKEN-2022:
-- Mint account (Token-2022): 0.002 SOL ($0.40)
-- Metadata Extension (~103 bytes): 0.0012 SOL ($0.24)
-- Token account: 0.002 SOL ($0.40)
-- Transaction fees: 0.0005 SOL ($0.10)
-- **ИТОГО:** 0.0057 SOL ($1.14)
-- **ЭКОНОМИЯ vs NFT:** 67% (-0.0118 SOL)
+- Mint account (Token-2022 with extensions): ~0.00948 SOL ($1.90)
+  - Base Mint (82) + MetadataPointer (~40) + GroupPointer (~40) + Metadata (~72) = ~234 bytes
+- Token account (ATA): 0.00207 SOL ($0.41)
+- Transaction fees: 0.00001 SOL ($0.002)
+- **ИТОГО:** ~0.01156 SOL ($2.31)
+- **ЭКОНОМИЯ vs Metaplex NFT:** 67% (-~$8.80)
 
 ### ЦЕНА ДЛЯ ПОЛЬЗОВАТЕЛЯ:
-- Комиссия оракула: 0.05 SOL ($10) - ФИКСИРОВАННАЯ
-- Покрытие Token-2022: 0.0057 SOL ($1.14)
-- Gas fee: 0.0005 SOL ($0.10)
-- **ИТОГО:** 0.0562 SOL (~$11.24)
-- **ДЕШЕВЛЕ vs NFT:** 17% (-$2.36)
+- Комиссия оракула: 0.01 SOL ($2) - ФИКСИРОВАННАЯ (PEOPLE_FEE constant)
+- Покрытие Token-2022: 0.01156 SOL ($2.31)
+- Gas fee: 0.00001 SOL ($0.002)
+- **ИТОГО:** 0.02157 SOL (~$4.31 @ $200/SOL)
+- **ДЕШЕВЛЕ vs Metaplex NFT:** 67% (-~$8.80)
 
 ### ПРИБЫЛЬ:
-- С каждого токена: 0.0443 SOL (~$8.86) чистыми
-- Окупаемость: после **12 токенов** (vs 17 NFT)
-- 100 токенов = **3.90 SOL ($780)** (vs 2.73 SOL для NFT)
-- 1000 токенов = **43.77 SOL ($8,754)** (vs 31.98 SOL для NFT)
-- ROI: **777%** на каждом токене!
+- Доход в treasury с токена: 0.01 SOL (~$2)
+- Затраты пользователя на storage: 0.01156 SOL (rent-exempt)
+- Бизнес-модель: Treasury растет, пользователи платят за storage
+- Окупаемость: после **126 токенов** (1.26 SOL in treasury)
+- 100 токенов = **1.0 SOL in treasury** (99% deployment cost recovered)
+- 500 токенов = **5.0 SOL in treasury** (398% ROI)
+- 1000 токенов = **10.0 SOL in treasury** (795% ROI)
 
 ## 🔧 ТЕХНИЧЕСКАЯ РЕАЛИЗАЦИЯ
 
@@ -468,27 +485,23 @@ solana program set-upgrade-authority \
 
 ---
 *Документ создан: 2025-09-18*
-*Последнее обновление: 2025-10-06*
-*Версия: 1.5 - Token-2022 Metadata Extension WORKING*
+*Последнее обновление: 2025-10-09*
+*Версия: 1.6 - Collection + Orientation (2025-10-09)*
 
-**Ключевые изменения v1.5:**
-- ✅ **TOKEN-2022 METADATA EXTENSION ПОЛНОСТЬЮ РЕАЛИЗОВАНО:**
-  - MetadataPointer Extension ✅
-  - Metadata Extension (name, symbol, uri) ✅
-  - Additional metadata (fortune_number) ✅
-  - All metadata fully on-chain ✅
-- ✅ **Verified on devnet:** AxCsTqRjpFeBibkUUWh7ErCK9LxUUjGsB92JECBUhfy7
-- ✅ **4 Fortune Tokens** заминтено успешно с полными метаданными
-- ⚠️ **CRITICAL DISCOVERY:** Localhost test validator НЕ поддерживает CPI reallocation!
-  - Error: "Failed to reallocate account data" (only on localhost)
-  - Solution: ВСЕГДА тестировать на devnet/mainnet
-- ✅ **Client pre-funding:** Mint account pre-funded with lamports for reallocation
-- ✅ **Wallet display note:** Most wallets don't yet support Token-2022 Metadata Extension
-  - Show "Unknown Token" - это временное ограничение wallet software
-  - Metadata IS fully on-chain and queryable via RPC/Explorer
+**Ключевые изменения v1.6 (2025-10-09):**
+- ✅ **COLLECTION SUPPORT:** TokenGroup extension на Collection Mint
+- ✅ **Oracle v4:** seed "oracle-v4", 148 bytes (добавлено поле collection_mint)
+- ✅ **Collection Mint v3:** seed "collection-v3", 318 bytes (GroupPointer + TokenGroup)
+- ✅ **Token Extensions оптимизированы:** MetadataPointer + GroupPointer (NO GroupMemberPointer!)
+- ✅ **TokenGroupMember УДАЛЕН:** фиксирует парсинг SolanaFM для Token Metadata Extension
+- ✅ **Ориентация карт:** формат name "#AAoAAoAAo" (o = i/! для inverted/upright)
+- ✅ **Additional metadata:** добавлены поля past, present, future с ориентацией
+- ✅ **Program size:** 175KB (179,272 bytes) - оптимизировано с Collection support
+- ✅ **Devnet status:** 2 Fortune Tokens minted, Token Metadata Extension visible on SolanaFM ✅
+- ✅ **Экономика обновлена:** 0.02157 SOL per mint, treasury accumulation model
+- ✅ **Verified:** https://solana.fm/address/8KtafmqDnH4QkaK6gwSaCDLumwJgU2rwnRrfb2UqZsyF?cluster=devnet-solana
 
-**Изменения v1.4 (предыдущая версия):**
-- ✅ МИГРАЦИЯ: Anchor → Vanilla Solana
-- ✅ Program size: 304KB → 123KB (экономия 60%)
-- ✅ Oracle PDA seed: "oracle" → "oracle-v2" (devnet conflict fix)
-- ✅ Token name format: HEX → Decimal (#4D1725 → #433323)
+**Предыдущие версии:**
+- v1.5: Token-2022 Metadata Extension WORKING on devnet
+- v1.4: Vanilla Solana migration, decimal name format
+- v1.0-1.3: Anchor development phases
