@@ -1,11 +1,11 @@
 "use client"
 
 import { useAtom } from "jotai"
+import { useWallet } from "@solana/wallet-adapter-react"
 import { SparklesCore } from "@/components/ui/sparkles"
 import { BgAnimateButton } from "@/components/ui/bg-animate-button"
 import { MultiStepLoader } from "@/components/ui/multi-step-loader"
 import {
-  isWalletConnectedAtom,
   currentReadingAtom,
   isGeneratingAtom,
   MOCK_CARDS,
@@ -22,8 +22,7 @@ const loadingSteps = [
 ]
 
 export default function HomePage() {
-  // TODO: remove after real wallet + blockchain implementation
-  const [isWalletConnected] = useAtom(isWalletConnectedAtom)
+  const { connected: isWalletConnected } = useWallet()
   const [currentReading, setCurrentReading] = useAtom(currentReadingAtom)
   const [isGenerating, setIsGenerating] = useAtom(isGeneratingAtom)
 

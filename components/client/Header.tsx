@@ -2,21 +2,50 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useAtom } from "jotai"
+import { useEffect, useState } from "react"
+import { useWallet } from "@solana/wallet-adapter-react"
+import { useWalletModal } from "@solana/wallet-adapter-react-ui"
+import { useConnection } from "@solana/wallet-adapter-react"
+import { LAMPORTS_PER_SOL } from "@solana/web3.js"
 import { BgAnimateButton } from "@/components/ui/bg-animate-button"
-import { isWalletConnectedAtom, walletBalanceAtom } from "@/lib/store"
 
 export function Header() {
   const pathname = usePathname()
+  const { publicKey, disconnect } = useWallet()
+  const { setVisible } = useWalletModal()
+  const { connection } = useConnection()
+  const [balance, setBalance] = useState<number | null>(null)
 
-  // TODO: remove after real wallet implementation
-  const [isConnected, setIsConnected] = useAtom(isWalletConnectedAtom)
-  const [balance] = useAtom(walletBalanceAtom)
+  // Fetch wallet balance when connected
+  useEffect(() => {
+    if (!publicKey) {
+      setBalance(null)
+      return
+    }
 
-  // TODO: remove after real wallet implementation - replace with actual wallet connection
+    // Initial balance fetch
+    connection.getBalance(publicKey).then((lamports) => {
+      setBalance(lamports / LAMPORTS_PER_SOL)
+    })
+
+    // Subscribe to balance changes
+    const subscriptionId = connection.onAccountChange(
+      publicKey,
+      (accountInfo) => {
+        setBalance(accountInfo.lamports / LAMPORTS_PER_SOL)
+      }
+    )
+
+    return () => {
+      connection.removeAccountChangeListener(subscriptionId)
+    }
+  }, [publicKey, connection])
+
   const handleConnectWallet = () => {
-    setIsConnected(true)
+    setVisible(true)
   }
+
+  const isConnected = !!publicKey
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 px-4 md:px-8 py-4 backdrop-blur-md bg-cyber-bg/30 border-b border-white/5">
@@ -55,12 +84,16 @@ export function Header() {
               Connect Wallet
             </BgAnimateButton>
           ) : (
-            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyber-surface border border-cyber-primary/30">
+            <div
+              onClick={disconnect}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyber-surface border border-cyber-primary/30 cursor-pointer hover:border-cyber-primary/50 transition-colors"
+              title="Click to disconnect"
+            >
               <span className="text-cyber-cyan font-orbitron text-sm font-semibold">
-                {balance.toFixed(3)} SOL
+                {balance !== null ? `${balance.toFixed(3)} SOL` : '...'}
               </span>
               <span className="text-slate-500 text-xs hidden md:inline">
-                • 8NsiwW...J7gH
+                • {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}
               </span>
             </div>
           )}

@@ -1,11 +1,5 @@
 import { atom } from 'jotai'
 
-// TODO: remove after real wallet implementation
-export const isWalletConnectedAtom = atom(false)
-
-// TODO: remove after real wallet implementation
-export const walletBalanceAtom = atom(0.523)
-
 // TODO: remove after real blockchain implementation
 export interface FortuneReading {
   cards: Array<{

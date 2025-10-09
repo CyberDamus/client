@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Orbitron } from "next/font/google"
 import "./globals.css"
 import { Header } from "@/components/client/Header"
+import { WalletProvider } from "@/lib/WalletProvider"
 
 const orbitron = Orbitron({
   subsets: ["latin"],
@@ -29,10 +30,12 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${orbitron.variable} font-orbitron`}>
-        <Header />
-        <div className="pt-20">
-          {children}
-        </div>
+        <WalletProvider>
+          <Header />
+          <div className="pt-20">
+            {children}
+          </div>
+        </WalletProvider>
       </body>
     </html>
   )
