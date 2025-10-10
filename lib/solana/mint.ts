@@ -1,24 +1,24 @@
+import { getAssociatedTokenAddress } from '@solana/spl-token'
 import {
+  ComputeBudgetProgram,
   Connection,
   Keypair,
+  LAMPORTS_PER_SOL,
   PublicKey,
+  SendTransactionError,
   SystemProgram,
   Transaction,
   TransactionInstruction,
-  LAMPORTS_PER_SOL,
-  SendTransactionError,
-  ComputeBudgetProgram,
 } from '@solana/web3.js'
-import { getAssociatedTokenAddress } from '@solana/spl-token'
 import {
-  PROGRAM_ID,
-  TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
-  SYSTEM_PROGRAM_ID,
-  RENT_SYSVAR_ID,
-  MINT_FEE_LAMPORTS,
-  getMintAccountSize,
   METADATA_EXTENSION_SPACE,
+  MINT_FEE_LAMPORTS,
+  PROGRAM_ID,
+  RENT_SYSVAR_ID,
+  SYSTEM_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  getMintAccountSize,
   getOraclePDA,
 } from './constants'
 import { serializeMintFortuneTokenInstruction } from './instructions'
@@ -216,7 +216,7 @@ export async function mintFortuneToken(
   })
 
   console.log('Transaction sent:', signature)
-  console.log(`Explorer: https://explorer.solana.com/tx/${signature}?cluster=devnet`)
+  console.log(`Explorer: https://solana.fm/tx/${signature}?cluster=devnet-solana`)
 
   // 14. Confirm transaction
   const confirmation = await connection.confirmTransaction({
@@ -298,7 +298,6 @@ export async function mintFortuneTokenWithRetry(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`Mint attempt ${attempt}/${maxRetries}`)
       return await mintFortuneToken(connection, userPublicKey, signTransaction)
     } catch (error) {
       lastError = error

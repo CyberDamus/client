@@ -9,6 +9,7 @@ export interface FortuneReading {
   }>
   timestamp: number
   interpretation: string
+  signature?: string  // Transaction signature for explorer link
 }
 
 export const currentReadingAtom = atom<FortuneReading | null>(null)

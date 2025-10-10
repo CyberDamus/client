@@ -82,7 +82,7 @@ export default function HomePage() {
         connection,
         publicKey,
         signTransaction,
-        3 // max retries
+        1
       )
 
       toast.success(
@@ -92,7 +92,7 @@ export default function HomePage() {
           action: {
             label: 'View on Explorer',
             onClick: () => {
-              window.open(`https://explorer.solana.com/tx/${result.signature}?cluster=devnet`, '_blank')
+              window.open(`https://solana.fm/tx/${result.signature}?cluster=devnet-solana`, '_blank')
             }
           }
         }
@@ -106,7 +106,8 @@ export default function HomePage() {
       setCurrentReading({
         cards: selectedCards,
         timestamp: Date.now(),
-        interpretation: generateMockInterpretation(selectedCards)
+        interpretation: generateMockInterpretation(selectedCards),
+        signature: result.signature  // Save signature for explorer link
       })
 
     } catch (error) {
@@ -204,8 +205,19 @@ export default function HomePage() {
         {/* STATE 3: After reading */}
         {isWalletConnected && hasReading && currentReading && (
           <div className="w-full max-w-6xl mx-auto">
-            <div className="text-center text-slate-400 text-lg mb-8">
-              Your Fortune
+            <div className="text-center text-slate-400 text-lg mb-8 flex items-center justify-center gap-3">
+              <span>Your Fortune</span>
+              {currentReading.signature && (
+                <a
+                  href={`https://solana.fm/tx/${currentReading.signature}?cluster=devnet-solana`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-cyber-cyan hover:text-cyber-primary transition-colors flex items-center gap-1"
+                >
+                  <span>🔍</span>
+                  <span>View on Explorer</span>
+                </a>
+              )}
             </div>
 
             {/* TODO: remove mock cards after real NFT implementation */}
