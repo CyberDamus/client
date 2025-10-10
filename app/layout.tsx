@@ -3,6 +3,7 @@ import { Orbitron } from "next/font/google"
 import "./globals.css"
 import { Header } from "@/components/client/Header"
 import { WalletProvider } from "@/lib/WalletProvider"
+import { Toaster } from "sonner"
 
 const orbitron = Orbitron({
   subsets: ["latin"],
@@ -35,6 +36,7 @@ export default function RootLayout({
           <div className="pt-20">
             {children}
           </div>
+          <Toaster position="bottom-right" theme="dark" richColors />
         </WalletProvider>
       </body>
     </html>

@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**CyberDamus** is a decentralized Tarot oracle application on Solana blockchain. Users connect their Solana wallet, pay 0.01 SOL to draw 3 Tarot cards (Past/Present/Future), and receive an on-chain fortune reading minted as an NFT. The client is built with Next.js 15, TypeScript, and features a cyberpunk aesthetic with extensive animations.
+**CyberDamus** is a decentralized Tarot oracle application on Solana blockchain. Users connect their Solana wallet, pay 0.01 SOL to draw 3 Tarot cards (Past/Present/Future), and receive an on-chain fortune reading minted as a **Token-2022 with Metadata Extension** (NOT a traditional NFT). The client is built with Next.js 15, TypeScript, and features a cyberpunk aesthetic with extensive animations.
+
+**Architecture**: Vanilla Solana (NOT Anchor) + Token-2022 + Metadata Extension for fully on-chain metadata.
 
 ## Development Commands
 
@@ -29,9 +31,10 @@ npx shadcn@latest add @cult-ui/<component-name>
 ## Architecture
 
 ### State Management (Jotai)
-- **lib/store.ts**: Global state atoms for wallet connection, readings, and loading states
-- Currently uses mock data with `TODO` comments marking items for blockchain integration
-- All wallet interactions (`isWalletConnectedAtom`, `walletBalanceAtom`) are temporary placeholders
+- **lib/store.ts**: Global state atoms for readings and loading states
+- `currentReadingAtom`: Stores the current fortune reading (cards + interpretation)
+- `isGeneratingAtom`: Loading state for mint transaction
+- ✅ Wallet state now handled by Solana Wallet Adapter (no longer in Jotai)
 
 ### Pages & Routing (Next.js App Router)
 - **app/page.tsx**: Main oracle page with 3 states:
@@ -44,11 +47,25 @@ npx shadcn@latest add @cult-ui/<component-name>
   - Modal for detailed reading view
 - **app/layout.tsx**: Root layout with Orbitron font, Header component, dark mode
 
+### Solana Integration (✅ IMPLEMENTED)
+- **lib/WalletProvider.tsx**: Solana Wallet Adapter provider
+  - Supports: Phantom, Solflare, Coinbase Wallet
+  - Network: Devnet
+  - Auto-connect enabled
+- **lib/solana/**: Complete blockchain integration
+  - `constants.ts`: Program ID, PDAs, fees
+  - `instructions.ts`: Borsh serialization for contract calls
+  - `oracle.ts`: Oracle state reading and validation
+  - `mint.ts`: Main `mintFortuneToken()` function with retry logic
+- **Toast notifications**: Sonner for user feedback
+
 ### Component System
 - **components/ui/**: 20+ UI components from @aceternity and @cult-ui registries
   - Aceternity: Animations and effects (sparkles, card-stack, multi-step-loader, etc.)
   - Cult-ui: Buttons, cards, typography (bg-animate-button, minimal-card, animated-number)
-- **components/client/Header.tsx**: Fixed header with navigation and wallet button
+- **components/client/Header.tsx**: Fixed header with real Solana wallet integration
+  - Shows balance, wallet address
+  - Click to disconnect
 - All interactive components use `"use client"` directive (Next.js 15 RSC convention)
 
 ### Styling & Design System
@@ -72,20 +89,52 @@ npx shadcn@latest add @cult-ui/<component-name>
 
 ## Important Implementation Notes
 
-### Mock Data & TODOs
-The codebase is currently in Phase 1 (MVP UI) with extensive mock data. Search for `TODO:` comments to identify areas requiring blockchain integration:
-- **Wallet Connection**: Replace Jotai atoms with Solana Wallet Adapter
-- **Card Drawing**: Replace `generateMockInterpretation()` with Anchor client calling `mint_fortune_nft()`
-- **NFT Parsing**: Extract card IDs from NFT name format "CyberDamus XXYYZZ" → [XX, YY, ZZ]
-- **IPFS Metadata**: Fetch card images and interpretations from IPFS
-- **History Page**: Replace MOCK_NFTS with real wallet NFT queries
+### Smart Contract Integration (✅ ACTIVE)
+The Solana program is located at `/cyberdamus_nft` (parent directory, branch: `token_2022_version`).
 
-### Smart Contract Integration (Phase 2)
-The Solana program is located at `/cyberdamus_nft` (parent directory). Key integration points:
-- Program ID location: TBD (after deploy to devnet)
-- Main instruction: `mint_fortune_nft(ctx)` - mints NFT with 3 random card IDs
-- NFT naming: `CyberDamus {card1}{card2}{card3}` (e.g., "CyberDamus 120734")
-- Cost: 0.01 SOL per reading
+**Contract Details:**
+- **Program ID (devnet)**: `2zmR8N51Q7KYZqnzJJWaJkM3wbxwBqj2gimNPf8Ldqu7`
+- **Architecture**: Vanilla Solana (NOT Anchor!) + Token-2022
+- **Oracle PDA seed**: `"oracle-v4"`
+- **Main instruction**: `MintFortuneToken` (enum variant 1)
+  - No arguments needed - just discriminator byte
+  - Generates 3 random cards on-chain using Fisher-Yates algorithm
+  - Mints Token-2022 with Metadata Extension
+  - All metadata stored on-chain (no external dependencies)
+- **Token naming**: `"CyberDamus #AAoAAoAAo"` where:
+  - AA = decimal card ID (00-77)
+  - o = orientation (i=inverted, !=upright)
+  - Example: "#19i20!07i" = cards [19 inverted, 20 upright, 7 inverted]
+- **Fee**: 0.01 SOL (hardcoded constant `PEOPLE_FEE`)
+- **Total cost**: ~0.02 SOL (0.01 fee + rent for mint account)
+
+**Client Integration:**
+```typescript
+// Main mint function
+import { mintFortuneTokenWithRetry } from '@/lib/solana'
+
+const result = await mintFortuneTokenWithRetry(
+  connection,
+  publicKey,
+  signTransaction,
+  3 // max retries
+)
+
+// Returns: { signature, mint, fortuneNumber }
+```
+
+**Safety Features:**
+- ✅ Balance check before transaction
+- ✅ Oracle status validation
+- ✅ Transaction simulation (dry-run)
+- ✅ Retry logic (exponential backoff)
+- ✅ User-friendly error messages via toast
+
+### Remaining TODOs
+- [ ] **Metadata parsing**: Extract real card data from Token-2022 metadata after mint
+- [ ] **History Page**: Query user's Token-2022 tokens and display collection
+- [ ] **Card images**: Fetch from IPFS using metadata URI
+- [ ] **Interpretation**: Parse on-chain oracle message
 
 ### Animation & Performance
 - Avoid using BackgroundGradientAnimation component (removed due to performance issues)
@@ -123,27 +172,89 @@ When replacing mock implementations:
 
 ## Project Status & Roadmap
 
-**Current Phase**: Phase 1 Complete (MVP UI)
+**Current Phase**: Phase 2 Partial (Blockchain Integration)
 - ✅ Next.js 15 setup with TypeScript
 - ✅ 20 UI components from @aceternity + @cult-ui
 - ✅ Main oracle page with 3 states
 - ✅ History page with responsive layout
-- ✅ Floating navigation and wallet UI
+- ✅ Solana Wallet Adapter integration (Phantom, Solflare, Coinbase)
+- ✅ Complete Vanilla Solana + Token-2022 integration
+- ✅ Real mint transaction with retry logic
+- ✅ Toast notifications for user feedback
+- ✅ Balance checks and error handling
 
-**Next Phase**: Phase 2 (Blockchain Integration)
-- [ ] Solana Wallet Adapter (@solana/wallet-adapter-react)
-- [ ] Anchor client for smart contract
-- [ ] Real card drawing with transaction status
-- [ ] NFT metadata parsing
-- [ ] IPFS image loading
+**Phase 2 Remaining**:
+- [ ] Parse Token-2022 metadata after mint (show real cards)
+- [ ] History page: Query user's Token-2022 collection
+- [ ] IPFS image loading for card visuals
+- [ ] Display on-chain oracle interpretation
 
 **Future Phase**: Phase 3 (Polish & Features)
 - [ ] Advanced animations (card shuffle, flip reveal)
 - [ ] Social sharing functionality
 - [ ] Error boundaries and comprehensive error handling
 - [ ] WebSocket for real-time transaction updates
+- [ ] Transaction confirmation modal with cost breakdown
+
+## Common Integration Patterns
+
+### Calling the Smart Contract
+```typescript
+// 1. Import mint function
+import { mintFortuneTokenWithRetry } from '@/lib/solana'
+import { useWallet, useConnection } from '@solana/wallet-adapter-react'
+
+// 2. Get wallet context
+const { publicKey, signTransaction } = useWallet()
+const { connection } = useConnection()
+
+// 3. Call mint function
+try {
+  const result = await mintFortuneTokenWithRetry(
+    connection,
+    publicKey,
+    signTransaction,
+    3 // max retries
+  )
+
+  console.log('Minted!', result.signature)
+  console.log('Mint address:', result.mint.toBase58())
+  console.log('Fortune #:', result.fortuneNumber)
+} catch (error) {
+  const parsedError = parseMintError(error)
+  toast.error(parsedError.message)
+}
+```
+
+### Reading Oracle State
+```typescript
+import { getOracleData, checkOracleStatus } from '@/lib/solana'
+
+// Check if Oracle is ready
+const status = await checkOracleStatus(connection)
+if (!status.ready) {
+  console.error('Oracle not ready:', status.error)
+}
+
+// Get Oracle data
+const oracle = await getOracleData(connection)
+console.log('Treasury:', oracle.treasury.toBase58())
+console.log('Total fortunes:', oracle.totalFortunes)
+console.log('Collection mint:', oracle.collectionMint.toBase58())
+```
+
+### Borsh Serialization
+The contract uses Borsh (NOT Anchor IDL). All instructions are manually serialized:
+```typescript
+import { serializeMintFortuneTokenInstruction } from '@/lib/solana'
+
+// MintFortuneToken = enum variant 1
+const instructionData = serializeMintFortuneTokenInstruction()
+// Returns: Buffer.from([1])
+```
 
 ## Related Documentation
 - **README.md**: Full project documentation with component lists and design system
-- **Smart Contract**: `/cyberdamus_nft` in parent directory
-- **Whitepaper**: `/WHITEPAPER.md` in parent directory
+- **Smart Contract**: `/cyberdamus_nft` (parent directory, branch: `token_2022_version`)
+- **Whitepaper**: `/WHITEPAPER.md` (parent directory) - detailed Token-2022 architecture
+- **FINAL_IMPLEMENTATION.md**: (parent directory) - contract implementation details

@@ -2,15 +2,23 @@
 
 import { useAtom } from "jotai"
 import { useWallet } from "@solana/wallet-adapter-react"
+import { useConnection } from "@solana/wallet-adapter-react"
 import { SparklesCore } from "@/components/ui/sparkles"
 import { BgAnimateButton } from "@/components/ui/bg-animate-button"
 import { MultiStepLoader } from "@/components/ui/multi-step-loader"
+import { toast } from "sonner"
 import {
   currentReadingAtom,
   isGeneratingAtom,
   MOCK_CARDS,
   generateMockInterpretation
 } from "@/lib/store"
+import {
+  mintFortuneTokenWithRetry,
+  checkUserBalance,
+  parseMintError,
+  checkOracleStatus
+} from "@/lib/solana"
 
 const loadingSteps = [
   { text: "Connecting to the Oracle..." },
@@ -22,28 +30,88 @@ const loadingSteps = [
 ]
 
 export default function HomePage() {
-  const { connected: isWalletConnected } = useWallet()
+  const { connected: isWalletConnected, publicKey, signTransaction } = useWallet()
+  const { connection } = useConnection()
   const [currentReading, setCurrentReading] = useAtom(currentReadingAtom)
   const [isGenerating, setIsGenerating] = useAtom(isGeneratingAtom)
 
-  // TODO: remove after real blockchain implementation - replace with actual NFT minting
+  // Real blockchain implementation
   const handleDrawCards = async () => {
+    if (!publicKey || !signTransaction) {
+      toast.error('Please connect your wallet first')
+      return
+    }
+
     setIsGenerating(true)
 
-    // Simulate blockchain transaction delay
-    await new Promise(resolve => setTimeout(resolve, 6000))
+    try {
+      // 1. Check Oracle status
+      toast.info('Checking Oracle status...')
+      const oracleStatus = await checkOracleStatus(connection)
+      if (!oracleStatus.ready) {
+        toast.error(`Oracle not ready: ${oracleStatus.error}`)
+        setIsGenerating(false)
+        return
+      }
 
-    // Generate 3 random cards
-    const shuffled = [...MOCK_CARDS].sort(() => Math.random() - 0.5)
-    const selectedCards = shuffled.slice(0, 3)
+      // 2. Check user balance
+      toast.info('Checking balance...')
+      const balanceCheck = await checkUserBalance(connection, publicKey)
+      if (!balanceCheck.sufficient) {
+        toast.error(
+          `Insufficient funds. You have ${balanceCheck.balance.toFixed(4)} SOL, need ${balanceCheck.required.toFixed(4)} SOL`
+        )
+        setIsGenerating(false)
+        return
+      }
 
-    setCurrentReading({
-      cards: selectedCards,
-      timestamp: Date.now(),
-      interpretation: generateMockInterpretation(selectedCards)
-    })
+      // 3. Mint fortune token
+      toast.info('Minting fortune token... (this may take 30-60 seconds)')
+      const result = await mintFortuneTokenWithRetry(
+        connection,
+        publicKey,
+        signTransaction,
+        3 // max retries
+      )
 
-    setIsGenerating(false)
+      toast.success(
+        `Fortune #${result.fortuneNumber} minted successfully!`,
+        {
+          description: `Transaction: ${result.signature.slice(0, 8)}...`,
+          action: {
+            label: 'View on Explorer',
+            onClick: () => {
+              window.open(`https://explorer.solana.com/tx/${result.signature}?cluster=devnet`, '_blank')
+            }
+          }
+        }
+      )
+
+      // 4. Generate mock reading for display (TODO: parse from token metadata)
+      // For now, show random cards until we implement metadata parsing
+      const shuffled = [...MOCK_CARDS].sort(() => Math.random() - 0.5)
+      const selectedCards = shuffled.slice(0, 3)
+
+      setCurrentReading({
+        cards: selectedCards,
+        timestamp: Date.now(),
+        interpretation: generateMockInterpretation(selectedCards)
+      })
+
+    } catch (error) {
+      console.error('Mint error:', error)
+      const parsedError = parseMintError(error)
+      toast.error('Failed to mint fortune', {
+        description: parsedError.message,
+      })
+
+      // Log detailed error
+      if (parsedError.logs) {
+        console.error('Transaction logs:', parsedError.logs)
+      }
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const hasReading = !!currentReading
