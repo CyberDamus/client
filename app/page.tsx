@@ -1,24 +1,25 @@
 "use client"
 
-import { useAtom } from "jotai"
-import { useWallet } from "@solana/wallet-adapter-react"
-import { useConnection } from "@solana/wallet-adapter-react"
-import { SparklesCore } from "@/components/ui/sparkles"
 import { BgAnimateButton } from "@/components/ui/bg-animate-button"
 import { MultiStepLoader } from "@/components/ui/multi-step-loader"
-import { toast } from "sonner"
+import { SparklesCore } from "@/components/ui/sparkles"
+import {
+  calculateMintCost,
+  checkOracleStatus,
+  checkUserBalance,
+  mintFortuneTokenWithRetry,
+  parseMintError
+} from "@/lib/solana"
 import {
   currentReadingAtom,
+  generateMockInterpretation,
   isGeneratingAtom,
-  MOCK_CARDS,
-  generateMockInterpretation
+  MOCK_CARDS
 } from "@/lib/store"
-import {
-  mintFortuneTokenWithRetry,
-  checkUserBalance,
-  parseMintError,
-  checkOracleStatus
-} from "@/lib/solana"
+import { useConnection, useWallet } from "@solana/wallet-adapter-react"
+import { useAtom } from "jotai"
+import { useEffect, useState } from "react"
+import { toast } from "sonner"
 
 const loadingSteps = [
   { text: "Connecting to the Oracle..." },
@@ -34,6 +35,16 @@ export default function HomePage() {
   const { connection } = useConnection()
   const [currentReading, setCurrentReading] = useAtom(currentReadingAtom)
   const [isGenerating, setIsGenerating] = useAtom(isGeneratingAtom)
+  const [mintCost, setMintCost] = useState<{ serviceFee: number; networkFee: number; total: number } | null>(null)
+
+  // Calculate mint cost when connection is available
+  useEffect(() => {
+    if (connection) {
+      calculateMintCost(connection)
+        .then(setMintCost)
+        .catch(err => console.error('Failed to calculate mint cost:', err))
+    }
+  }, [connection])
 
   // Real blockchain implementation
   const handleDrawCards = async () => {
@@ -168,15 +179,25 @@ export default function HomePage() {
             <h1 className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyber-primary to-cyber-accent">
               Draw Your Fortune
             </h1>
-            <p className="text-slate-400 text-lg">
-              3 cards • 0.01 SOL
-            </p>
             <BgAnimateButton
               onClick={handleDrawCards}
               className="text-xl py-8 px-16 rounded-xl font-orbitron glow-border"
             >
-              🔮 Draw 3 Cards
+              ⚡ Decrypt Your Fate
             </BgAnimateButton>
+
+            {/* Cost breakdown below button */}
+            {mintCost && (
+              <div className="text-xs text-slate-400 opacity-70 mt-3 flex flex-col items-center">
+                <div className="mb-1">💰 ~{mintCost.total.toFixed(3)} SOL per reading</div>
+                <div className="text-[11px] space-y-0.5">
+                  <div className="text-left">
+                    <div>• Service fee: {mintCost.serviceFee.toFixed(2)} SOL</div>
+                    <div>• Network fee: ~{mintCost.networkFee.toFixed(3)} SOL</div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -229,7 +250,7 @@ export default function HomePage() {
                 onClick={handleDrawCards}
                 className="text-lg py-6 px-10 rounded-xl font-orbitron"
               >
-                🔄 Draw Again
+                ⚡ Decrypt Again
               </BgAnimateButton>
             </div>
           </div>

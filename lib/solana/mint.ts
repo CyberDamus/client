@@ -7,6 +7,7 @@ import {
   TransactionInstruction,
   LAMPORTS_PER_SOL,
   SendTransactionError,
+  ComputeBudgetProgram,
 } from '@solana/web3.js'
 import { getAssociatedTokenAddress } from '@solana/spl-token'
 import {
@@ -37,22 +38,26 @@ export interface MintError {
 }
 
 /**
- * Calculate total cost for minting (fee + rent + gas)
+ * Calculate total cost for minting (service fee + network fee)
  */
 export async function calculateMintCost(connection: Connection): Promise<{
-  fee: number
-  rent: number
+  serviceFee: number
+  networkFee: number
   total: number
 }> {
   // Calculate exact mint size with extensions
   const mintLen = getMintAccountSize()
   const totalSpace = mintLen + METADATA_EXTENSION_SPACE
-  const rent = await connection.getMinimumBalanceForRentExemption(totalSpace)
+  const rentLamports = await connection.getMinimumBalanceForRentExemption(totalSpace)
+
+  // Network fee includes rent + transaction fee estimate
+  // Transaction fee: ~5000 lamports per signature (2 signatures) + compute units (~0.002 SOL)
+  const networkFee = (rentLamports / LAMPORTS_PER_SOL) + 0.002
 
   return {
-    fee: MINT_FEE_LAMPORTS / LAMPORTS_PER_SOL,
-    rent: rent / LAMPORTS_PER_SOL,
-    total: (MINT_FEE_LAMPORTS + rent) / LAMPORTS_PER_SOL,
+    serviceFee: MINT_FEE_LAMPORTS / LAMPORTS_PER_SOL,  // 0.01 SOL to treasury
+    networkFee,  // rent + tx fees (~0.012 SOL)
+    total: (MINT_FEE_LAMPORTS / LAMPORTS_PER_SOL) + networkFee,
   }
 }
 
@@ -183,23 +188,28 @@ export async function mintFortuneToken(
     data: instructionData,
   })
 
-  // 8. Create transaction
-  const transaction = new Transaction()
-  transaction.add(createMintAccountIx, mintFortuneIx)
+  // 8. Create compute budget instruction (helps Phantom estimate fees correctly)
+  const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
+    units: 300000, // ~300k CU for our transaction (createAccount + mintFortune)
+  })
 
-  // 9. Get recent blockhash
+  // 9. Create transaction with compute budget first
+  const transaction = new Transaction()
+  transaction.add(computeBudgetIx, createMintAccountIx, mintFortuneIx)
+
+  // 10. Get recent blockhash
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
   transaction.recentBlockhash = blockhash
   transaction.lastValidBlockHeight = lastValidBlockHeight
   transaction.feePayer = userPublicKey
 
-  // 10. Sign transaction with mint keypair (mint must be signer)
+  // 11. Sign transaction with mint keypair (mint must be signer)
   transaction.partialSign(mintKeypair)
 
-  // 11. Sign transaction with user wallet
+  // 12. Sign transaction with user wallet (Phantom will estimate cost here)
   const signedTransaction = await signTransaction(transaction)
 
-  // 12. Send transaction
+  // 13. Send transaction
   const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
     skipPreflight: false,
     preflightCommitment: 'confirmed',
@@ -208,7 +218,7 @@ export async function mintFortuneToken(
   console.log('Transaction sent:', signature)
   console.log(`Explorer: https://explorer.solana.com/tx/${signature}?cluster=devnet`)
 
-  // 13. Confirm transaction
+  // 14. Confirm transaction
   const confirmation = await connection.confirmTransaction({
     signature,
     blockhash,
@@ -221,7 +231,7 @@ export async function mintFortuneToken(
 
   console.log('Transaction confirmed!')
 
-  // 14. Return result
+  // 15. Return result
   // Note: We can't easily parse cards from logs here, so we return fortune number
   return {
     signature,
