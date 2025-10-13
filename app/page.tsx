@@ -8,6 +8,7 @@ import {
   checkOracleStatus,
   checkUserBalance,
   mintFortuneTokenWithRetry,
+  parseCardsFromToken,
   parseMintError
 } from "@/lib/solana"
 import {
@@ -34,6 +35,7 @@ export default function HomePage() {
   const { connected: isWalletConnected, publicKey, signTransaction } = useWallet()
   const { connection } = useConnection()
   const [currentReading, setCurrentReading] = useAtom(currentReadingAtom)
+  console.log('🚀 ~ currentReading:', currentReading)
   const [isGenerating, setIsGenerating] = useAtom(isGeneratingAtom)
   const [mintCost, setMintCost] = useState<{ serviceFee: number; networkFee: number; total: number } | null>(null)
 
@@ -98,10 +100,15 @@ export default function HomePage() {
         }
       )
 
-      // 4. Generate mock reading for display (TODO: parse from token metadata)
-      // For now, show random cards until we implement metadata parsing
-      const shuffled = [...MOCK_CARDS].sort(() => Math.random() - 0.5)
-      const selectedCards = shuffled.slice(0, 3)
+      // 4. Parse real cards from token metadata
+      toast.info('Reading your fortune from the blockchain...')
+      const parsedCards = await parseCardsFromToken(connection, result.mint)
+
+      // Map parsed cards to full card data with inverted flag
+      const selectedCards = parsedCards.map(({ id, inverted }) => ({
+        ...MOCK_CARDS[id],
+        inverted
+      }))
 
       setCurrentReading({
         cards: selectedCards,
@@ -144,7 +151,7 @@ export default function HomePage() {
         particleColor="#8b5cf6"
       />
 
-      {/* TODO: remove after real implementation - Loader during generation */}
+      {/* TODO: check if loader ok */}
       <MultiStepLoader
         loadingStates={loadingSteps}
         loading={isGenerating}

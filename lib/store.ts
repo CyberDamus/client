@@ -6,6 +6,7 @@ export interface FortuneReading {
     id: number
     name: string
     meaning: string
+    inverted?: boolean  // Card orientation (inverted/upright)
   }>
   timestamp: number
   interpretation: string

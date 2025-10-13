@@ -9,3 +9,6 @@ export * from './oracle'
 
 // Mint (main functions)
 export * from './mint'
+
+// Token Metadata
+export * from './tokenMetadata'
