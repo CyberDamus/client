@@ -35,7 +35,6 @@ export default function HomePage() {
   const { connected: isWalletConnected, publicKey, signTransaction } = useWallet()
   const { connection } = useConnection()
   const [currentReading, setCurrentReading] = useAtom(currentReadingAtom)
-  console.log('🚀 ~ currentReading:', currentReading)
   const [isGenerating, setIsGenerating] = useAtom(isGeneratingAtom)
   const [mintCost, setMintCost] = useState<{ serviceFee: number; networkFee: number; total: number } | null>(null)
 

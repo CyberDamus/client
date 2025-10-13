@@ -12,3 +12,6 @@ export * from './mint'
 
 // Token Metadata
 export * from './tokenMetadata'
+
+// History
+export * from './history'
