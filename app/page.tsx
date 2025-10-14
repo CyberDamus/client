@@ -18,6 +18,7 @@ import {
   MOCK_CARDS
 } from "@/lib/store"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
+import { useWalletModal } from "@solana/wallet-adapter-react-ui"
 import { useAtom } from "jotai"
 import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
@@ -35,6 +36,7 @@ const loadingSteps = [
 export default function HomePage() {
   const { connected: isWalletConnected, publicKey, signTransaction } = useWallet()
   const { connection } = useConnection()
+  const { setVisible } = useWalletModal()
   const [currentReading, setCurrentReading] = useAtom(currentReadingAtom)
   const [isGenerating, setIsGenerating] = useAtom(isGeneratingAtom)
   const [mintCost, setMintCost] = useState<{ serviceFee: number; networkFee: number; total: number } | null>(null)
@@ -57,6 +59,11 @@ export default function HomePage() {
         .catch(err => console.error('Failed to calculate mint cost:', err))
     }
   }, [connection])
+
+  // Open wallet connection modal
+  const handleConnectWallet = () => {
+    setVisible(true)
+  }
 
   // Real blockchain implementation
   const handleDrawCards = async () => {
@@ -182,10 +189,10 @@ export default function HomePage() {
               Connect your wallet to begin
             </p>
             <BgAnimateButton
-              disabled
-              className="opacity-50 cursor-not-allowed text-xl py-6 px-12 rounded-xl font-orbitron"
+              onClick={handleConnectWallet}
+              className="text-xl py-6 px-12 rounded-xl font-orbitron"
             >
-              Connect Wallet First
+              Connect Wallet
             </BgAnimateButton>
           </div>
         )}
@@ -307,7 +314,8 @@ export default function HomePage() {
             <div className="flex justify-center pb-12">
               <BgAnimateButton
                 onClick={handleDrawCards}
-                className="text-lg py-6 px-10 rounded-xl font-orbitron"
+                className="text-xl py-8 px-16 rounded-xl font-orbitron glow-border"
+              // className="text-lg py-6 px-10 rounded-xl font-orbitron"
               >
                 ⚡ Decrypt Again
               </BgAnimateButton>
