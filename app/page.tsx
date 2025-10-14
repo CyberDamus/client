@@ -19,7 +19,8 @@ import {
 } from "@/lib/store"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { useAtom } from "jotai"
-import { useEffect, useState } from "react"
+import Image from "next/image"
+import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 const loadingSteps = [
@@ -37,6 +38,16 @@ export default function HomePage() {
   const [currentReading, setCurrentReading] = useAtom(currentReadingAtom)
   const [isGenerating, setIsGenerating] = useAtom(isGeneratingAtom)
   const [mintCost, setMintCost] = useState<{ serviceFee: number; networkFee: number; total: number } | null>(null)
+  const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({})
+
+  // Generate random mock images for each card (0-3.PNG)
+  const mockImages = useMemo(() => {
+    return [
+      Math.floor(Math.random() * 4),
+      Math.floor(Math.random() * 4),
+      Math.floor(Math.random() * 4),
+    ]
+  }, [currentReading?.timestamp])
 
   // Calculate mint cost when connection is available
   useEffect(() => {
@@ -135,9 +146,9 @@ export default function HomePage() {
   const hasReading = !!currentReading
 
   return (
-    <div className="relative h-screen w-full overflow-hidden bg-cyber-bg">
+    <div className="relative min-h-screen w-full bg-cyber-bg">
       {/* Simple gradient background - NO BLOB! */}
-      <div className="absolute inset-0 bg-gradient-to-br from-cyber-bg via-purple-950/20 to-cyber-bg" />
+      <div className="fixed inset-0 bg-gradient-to-br from-cyber-bg via-purple-950/20 to-cyber-bg" />
 
       {/* Sparkles - only stars, no blob */}
       <SparklesCore
@@ -146,7 +157,7 @@ export default function HomePage() {
         minSize={0.6}
         maxSize={1.4}
         particleDensity={100}
-        className="absolute inset-0 z-0"
+        className="fixed inset-0 z-0"
         particleColor="#8b5cf6"
       />
 
@@ -157,8 +168,8 @@ export default function HomePage() {
         duration={1000}
       />
 
-      {/* Content - Full viewport, centered */}
-      <div className="relative z-10 h-full flex flex-col items-center justify-center px-4">
+      {/* Content */}
+      <div className={`relative z-10 flex flex-col items-center px-4 ${!hasReading ? 'min-h-screen justify-center' : 'py-8'}`}>
 
         {/* STATE 1: Wallet not connected */}
         {!isWalletConnected && (
@@ -210,7 +221,7 @@ export default function HomePage() {
 
         {/* STATE 3: After reading */}
         {isWalletConnected && hasReading && currentReading && (
-          <div className="w-full max-w-6xl mx-auto">
+          <div className="w-full max-w-6xl mx-auto mt-1">
             <div className="text-center text-slate-400 text-lg mb-8 flex items-center justify-center gap-3">
               <span>Your Fortune</span>
               {currentReading.signature && (
@@ -230,12 +241,41 @@ export default function HomePage() {
             <div className="flex flex-col md:flex-row gap-6 mb-8">
               {currentReading.cards.map((card, idx) => (
                 <div key={idx} className="flex-1 space-y-4">
-                  {/* Card Image Placeholder */}
-                  <div className="aspect-[2/3] bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-lg flex flex-col items-center justify-center p-6">
-                    <span className="text-6xl font-mono text-cyber-primary mb-4">
-                      {String(card.id).padStart(2, '0')}
-                    </span>
-                    <h3 className="text-xl font-bold text-center mb-2">{card.name}</h3>
+                  {/* Card Image */}
+                  <div className="aspect-[2/3] bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-lg overflow-hidden relative flex flex-col items-center justify-center p-6">
+                    {!imageErrors[idx] ? (
+                      <>
+                        <div className={`relative w-full h-full ${card.inverted ? 'rotate-180' : ''}`}>
+                          <Image
+                            src={`/mock_imgs/${mockImages[idx]}.PNG`}
+                            alt={card.name}
+                            fill
+                            className="object-contain"
+                            onError={() => {
+                              setImageErrors(prev => ({ ...prev, [idx]: true }))
+                            }}
+                          />
+                        </div>
+                        {card.inverted && (
+                          <span className="absolute bottom-4 text-xs text-cyber-accent uppercase tracking-wider bg-cyber-bg/80 px-2 py-1 rounded">
+                            Inverted
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      /* Fallback to numbers if image fails */
+                      <>
+                        <span className="text-6xl font-mono text-cyber-primary mb-4">
+                          {String(card.id).padStart(2, '0')}
+                        </span>
+                        <h3 className="text-xl font-bold text-center mb-2">{card.name}</h3>
+                        {card.inverted && (
+                          <span className="text-xs text-cyber-accent uppercase tracking-wider mt-2">
+                            Inverted
+                          </span>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   {/* Card Info */}
@@ -243,6 +283,7 @@ export default function HomePage() {
                     <p className="text-xs text-cyber-cyan uppercase tracking-wider mb-2">
                       {['Past', 'Present', 'Future'][idx]}
                     </p>
+                    <h3 className="text-lg font-bold mb-1">{card.name}</h3>
                     <p className="text-sm text-slate-400">{card.meaning}</p>
                   </div>
                 </div>
@@ -263,7 +304,7 @@ export default function HomePage() {
             </div>
 
             {/* Draw Again Button */}
-            <div className="fixed bottom-8 left-1/2 -translate-x-1/2">
+            <div className="flex justify-center pb-12">
               <BgAnimateButton
                 onClick={handleDrawCards}
                 className="text-lg py-6 px-10 rounded-xl font-orbitron"

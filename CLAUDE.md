@@ -57,6 +57,8 @@ npx shadcn@latest add @cult-ui/<component-name>
   - `instructions.ts`: Borsh serialization for contract calls
   - `oracle.ts`: Oracle state reading and validation
   - `mint.ts`: Main `mintFortuneToken()` function with retry logic
+  - `tokenMetadata.ts`: Parse cards from Token-2022 metadata (format: "CyberDamus #19i20!07i")
+  - `history.ts`: Fetch user's fortune collection with batch processing and GroupMemberPointer filtering
 - **Toast notifications**: Sonner for user feedback
 
 ### Component System
@@ -131,10 +133,10 @@ const result = await mintFortuneTokenWithRetry(
 - ✅ User-friendly error messages via toast
 
 ### Remaining TODOs
-- [ ] **Metadata parsing**: Extract real card data from Token-2022 metadata after mint
-- [ ] **History Page**: Query user's Token-2022 tokens and display collection
-- [ ] **Card images**: Fetch from IPFS using metadata URI
-- [ ] **Interpretation**: Parse on-chain oracle message
+- ✅ **Metadata parsing**: Extract real card data from Token-2022 metadata after mint (COMPLETED)
+- ✅ **History Page**: Query user's Token-2022 tokens and display collection (COMPLETED)
+- [ ] **Card images**: Display IPFS images (URIs already extracted from additionalMetadata)
+- [ ] **Interpretation**: Real AI/Oracle interpretation (currently using mock generation)
 
 ### Animation & Performance
 - Avoid using BackgroundGradientAnimation component (removed due to performance issues)
@@ -172,22 +174,26 @@ When replacing mock implementations:
 
 ## Project Status & Roadmap
 
-**Current Phase**: Phase 2 Partial (Blockchain Integration)
+**Current Phase**: Phase 2 (Blockchain Integration) - ~90% Complete
 - ✅ Next.js 15 setup with TypeScript
 - ✅ 20 UI components from @aceternity + @cult-ui
 - ✅ Main oracle page with 3 states
-- ✅ History page with responsive layout
+- ✅ History page with responsive layout (table on desktop, cards on mobile)
 - ✅ Solana Wallet Adapter integration (Phantom, Solflare, Coinbase)
 - ✅ Complete Vanilla Solana + Token-2022 integration
 - ✅ Real mint transaction with retry logic
 - ✅ Toast notifications for user feedback
 - ✅ Balance checks and error handling
+- ✅ Parse Token-2022 metadata after mint (real cards from token name)
+- ✅ History page: Query user's Token-2022 collection with batch processing
+- ✅ Card parsing from on-chain token names (format: "CyberDamus #AAoAAoAAo")
+- ✅ Transaction signatures and Solana Explorer links
+- ✅ IPFS URI extraction from additionalMetadata (past/present/future)
+- ✅ GroupMemberPointer extension filtering for collection membership
 
 **Phase 2 Remaining**:
-- [ ] Parse Token-2022 metadata after mint (show real cards)
-- [ ] History page: Query user's Token-2022 collection
-- [ ] IPFS image loading for card visuals
-- [ ] Display on-chain oracle interpretation
+- [ ] IPFS image display (URIs already available in `cardImages` field)
+- [ ] Real AI/Oracle interpretation (currently using `generateMockInterpretation()`)
 
 **Future Phase**: Phase 3 (Polish & Features)
 - [ ] Advanced animations (card shuffle, flip reveal)
@@ -251,6 +257,38 @@ import { serializeMintFortuneTokenInstruction } from '@/lib/solana'
 // MintFortuneToken = enum variant 1
 const instructionData = serializeMintFortuneTokenInstruction()
 // Returns: Buffer.from([1])
+```
+
+### Fetching Fortune History
+```typescript
+import { fetchUserFortunes } from '@/lib/solana'
+import { useConnection, useWallet } from '@solana/wallet-adapter-react'
+
+// Get wallet and connection
+const { publicKey } = useWallet()
+const { connection } = useConnection()
+
+// Fetch user's fortune collection (limit: 10 latest)
+const fortunes = await fetchUserFortunes(connection, publicKey, 10)
+
+// Returns array of HistoryFortune:
+// {
+//   mint: PublicKey,
+//   tokenAccount: PublicKey,
+//   fortuneNumber: number,
+//   timestamp: number,
+//   cards: ParsedCard[],  // [{id: 19, inverted: true}, ...]
+//   metadata: { name, symbol, uri },
+//   cardImages?: { past, present, future },  // IPFS URIs
+//   signature?: string  // Transaction signature for explorer
+// }
+
+// Features:
+// - Batch processing (5 tokens at a time) for performance
+// - GroupMemberPointer filtering (verifies collection membership)
+// - Fallback to metadata name check if GroupMemberPointer unavailable
+// - Sorted by timestamp (newest first)
+// - Extracts IPFS URIs from additionalMetadata
 ```
 
 ## Related Documentation

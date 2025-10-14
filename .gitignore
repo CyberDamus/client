@@ -40,3 +40,4 @@ next-env.d.ts
 
 # MCP config (local only)
 .mcp.json
+public/mock_imgs/*
