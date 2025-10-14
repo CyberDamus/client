@@ -328,7 +328,7 @@ export default function HistoryPage() {
               <div className="mt-6 p-4 bg-cyber-bg/50 rounded-lg border border-cyber-primary/20">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-xl">🔮</span>
-                  <h4 className="text-sm font-bold text-cyber-primary uppercase tracking-wider">Oracle's Message</h4>
+                  <h4 className="text-sm font-bold text-cyber-primary uppercase tracking-wider">Oracle&apos;s Message</h4>
                 </div>
                 <p className="text-sm text-slate-300 italic leading-relaxed">
                   {selectedFortune.interpretation}

@@ -302,7 +302,7 @@ export default function HomePage() {
               <div className="bg-cyber-surface/50 backdrop-blur border border-cyber-primary/30 rounded-lg p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <span className="text-2xl">🔮</span>
-                  <h3 className="text-xl font-bold text-cyber-primary">Oracle's Interpretation</h3>
+                  <h3 className="text-xl font-bold text-cyber-primary">Oracle&apos;s Interpretation</h3>
                 </div>
                 <p className="text-slate-300 leading-relaxed italic">
                   {currentReading.interpretation}
