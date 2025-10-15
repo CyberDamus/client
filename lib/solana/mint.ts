@@ -12,6 +12,7 @@ import {
 } from '@solana/web3.js'
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
+  MEMO_PROGRAM_ID,
   METADATA_EXTENSION_SPACE,
   MINT_FEE_LAMPORTS,
   PROGRAM_ID,
@@ -193,9 +194,21 @@ export async function mintFortuneToken(
     units: 300000, // ~300k CU for our transaction (createAccount + mintFortune)
   })
 
-  // 9. Create transaction with compute budget first
+  // 8b. Add unique memo instruction to prevent duplicate transaction detection
+  // PROBLEM: Solana RPC nodes cache getLatestBlockhash() for 2-4 seconds
+  // If user clicks rapidly or retry happens, both calls get SAME blockhash from cache
+  // Solana identifies duplicate by: blockhash + accounts + instruction data
+  // SOLUTION: Add Memo with unique data (timestamp + random) to make each transaction unique
+  // Format: "CyberDamus-{timestamp}-{random}" creates unique signature even with same blockhash
+  const memoInstruction = new TransactionInstruction({
+    keys: [{ pubkey: userPublicKey, isSigner: true, isWritable: false }],
+    data: Buffer.from(`CyberDamus-${Date.now()}-${Math.random()}`, 'utf-8'),
+    programId: MEMO_PROGRAM_ID,
+  })
+
+  // 9. Create transaction with memo to ensure uniqueness
   const transaction = new Transaction()
-  transaction.add(computeBudgetIx, createMintAccountIx, mintFortuneIx)
+  transaction.add(computeBudgetIx, memoInstruction, createMintAccountIx, mintFortuneIx)
 
   // 10. Get recent blockhash
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
@@ -248,7 +261,18 @@ export function parseMintError(error: unknown): MintError {
   if (error instanceof SendTransactionError) {
     const logs = error.logs || []
 
-    // Check for specific errors
+    // Check for simulation failed / already processed (RPC cache/timing issue)
+    if (error.message.includes('Simulation failed') ||
+        error.message.includes('already been processed') ||
+        error.message.includes('This transaction has already been processed')) {
+      return {
+        message: 'Transaction timing issue. Please try again.',
+        code: 'ALREADY_PROCESSED',
+        logs,
+      }
+    }
+
+    // Check for insufficient funds
     if (logs.some(log => log.includes('insufficient funds'))) {
       return {
         message: 'Insufficient funds. You need at least 0.02 SOL.',
@@ -257,6 +281,7 @@ export function parseMintError(error: unknown): MintError {
       }
     }
 
+    // Check for account already in use
     if (logs.some(log => log.includes('already in use'))) {
       return {
         message: 'Mint account already exists. Please try again.',
@@ -265,6 +290,7 @@ export function parseMintError(error: unknown): MintError {
       }
     }
 
+    // Generic transaction error
     return {
       message: error.message,
       code: 'TRANSACTION_ERROR',

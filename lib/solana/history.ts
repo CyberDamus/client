@@ -15,7 +15,7 @@ import { parseCardsFromToken, ParsedCard } from './tokenMetadata'
  * Token-2022 stores additionalMetadata as array of [key, value] tuples:
  * [['fortune_number', '27'], ['past', 'ipfs://...'], ...]
  */
-function getAdditionalMetadataField(
+export function getAdditionalMetadataField(
   metadata: any,
   fieldName: string
 ): string | undefined {

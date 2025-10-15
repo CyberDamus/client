@@ -22,6 +22,10 @@ export const SYSTEM_PROGRAM_ID = new PublicKey('11111111111111111111111111111111
 // Rent Sysvar ID
 export const RENT_SYSVAR_ID = new PublicKey('SysvarRent111111111111111111111111111111111')
 
+// Memo Program ID (official Solana program for adding text notes to transactions)
+// Used to make each transaction unique even with identical blockhash
+export const MEMO_PROGRAM_ID = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr')
+
 /**
  * Calculate exact size for Token-2022 Mint with extensions
  * Includes MetadataPointer and GroupPointer extensions

@@ -1,5 +1,5 @@
-import { Connection, PublicKey } from '@solana/web3.js'
 import { getTokenMetadata } from '@solana/spl-token'
+import { Connection, PublicKey } from '@solana/web3.js'
 import { TOKEN_2022_PROGRAM_ID } from './constants'
 
 export interface ParsedCard {
@@ -49,7 +49,6 @@ export async function parseCardsFromToken(
       parseCardString(nameMatch[3]),  // Future
     ]
 
-    console.log('Parsed cards from token:', cards)
     return cards
 
   } catch (error) {

@@ -11,6 +11,7 @@ export interface FortuneReading {
   timestamp: number
   interpretation: string
   signature?: string  // Transaction signature for explorer link
+  fortuneNumber?: number  // Fortune number from on-chain metadata
 }
 
 export const currentReadingAtom = atom<FortuneReading | null>(null)

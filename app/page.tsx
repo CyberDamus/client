@@ -7,9 +7,11 @@ import {
   calculateMintCost,
   checkOracleStatus,
   checkUserBalance,
+  getAdditionalMetadataField,
   mintFortuneTokenWithRetry,
   parseCardsFromToken,
-  parseMintError
+  parseMintError,
+  TOKEN_2022_PROGRAM_ID
 } from "@/lib/solana"
 import {
   currentReadingAtom,
@@ -17,11 +19,12 @@ import {
   isGeneratingAtom,
   MOCK_CARDS
 } from "@/lib/store"
+import { getTokenMetadata } from "@solana/spl-token"
 import { useConnection, useWallet } from "@solana/wallet-adapter-react"
 import { useWalletModal } from "@solana/wallet-adapter-react-ui"
 import { useAtom } from "jotai"
 import Image from "next/image"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 const loadingSteps = [
@@ -41,6 +44,9 @@ export default function HomePage() {
   const [isGenerating, setIsGenerating] = useAtom(isGeneratingAtom)
   const [mintCost, setMintCost] = useState<{ serviceFee: number; networkFee: number; total: number } | null>(null)
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({})
+
+  // Ref for debouncing - prevents rapid successive calls
+  const lastCallTimeRef = useRef<number>(0)
 
   // Generate random mock images for each card (0-3.PNG)
   const mockImages = useMemo(() => {
@@ -65,12 +71,21 @@ export default function HomePage() {
     setVisible(true)
   }
 
-  // Real blockchain implementation
+  // Real blockchain implementation with debouncing
   const handleDrawCards = async () => {
     if (!publicKey || !signTransaction) {
       toast.error('Please connect your wallet first')
       return
     }
+
+    // Debouncing: prevent calls within 2 seconds of each other
+    const now = Date.now()
+    const timeSinceLastCall = now - lastCallTimeRef.current
+    if (timeSinceLastCall < 2000) {
+      toast.info('Please wait a moment before drawing again')
+      return
+    }
+    lastCallTimeRef.current = now
 
     setIsGenerating(true)
 
@@ -127,21 +142,43 @@ export default function HomePage() {
         inverted
       }))
 
+      // 5. Get fortune number from token metadata (same as history page)
+      const metadata = await getTokenMetadata(
+        connection,
+        result.mint,
+        'confirmed',
+        TOKEN_2022_PROGRAM_ID
+      )
+
+      const fortuneNumberStr = getAdditionalMetadataField(metadata, 'fortune_number')
+      const fortuneNumber = fortuneNumberStr ? parseInt(fortuneNumberStr, 10) : result.fortuneNumber
+
       setCurrentReading({
         cards: selectedCards,
         timestamp: Date.now(),
         interpretation: generateMockInterpretation(selectedCards),
-        signature: result.signature  // Save signature for explorer link
+        signature: result.signature,  // Save signature for explorer link
+        fortuneNumber: fortuneNumber  // Save fortune number from metadata
       })
 
     } catch (error) {
       console.error('Mint error:', error)
       const parsedError = parseMintError(error)
-      toast.error('Failed to mint fortune', {
-        description: parsedError.message,
-      })
 
-      // Log detailed error
+      // Friendly message for "already processed" errors (RPC cache/timing issue)
+      // This happens when user delays wallet confirmation or RPC sees duplicate blockhash
+      if (parsedError.code === 'ALREADY_PROCESSED' || parsedError.code === 'SIMULATION_FAILED') {
+        toast.warning('⚡ The cosmic connection flickered', {
+          description: 'Your funds are safe. Give it another try!',
+        })
+      } else {
+        // Regular error handling for real issues
+        toast.error('Failed to mint fortune', {
+          description: parsedError.message,
+        })
+      }
+
+      // Log detailed error for debugging
       if (parsedError.logs) {
         console.error('Transaction logs:', parsedError.logs)
       }
@@ -206,6 +243,7 @@ export default function HomePage() {
             </h1>
             <BgAnimateButton
               onClick={handleDrawCards}
+              disabled={isGenerating}
               className="text-xl py-8 px-16 rounded-xl font-orbitron glow-border"
             >
               ⚡ Decrypt Your Fate
@@ -230,7 +268,10 @@ export default function HomePage() {
         {isWalletConnected && hasReading && currentReading && (
           <div className="w-full max-w-6xl mx-auto mt-1">
             <div className="text-center text-slate-400 text-lg mb-8 flex items-center justify-center gap-3">
-              <span>Your Fortune</span>
+              <span>
+                Your Fortune
+                {currentReading.fortuneNumber && ` - #${currentReading.fortuneNumber}`}
+              </span>
               {currentReading.signature && (
                 <a
                   href={`https://solana.fm/tx/${currentReading.signature}?cluster=devnet-solana`}
@@ -314,6 +355,7 @@ export default function HomePage() {
             <div className="flex justify-center pb-12">
               <BgAnimateButton
                 onClick={handleDrawCards}
+                disabled={isGenerating}
                 className="text-xl py-8 px-16 rounded-xl font-orbitron glow-border"
               // className="text-lg py-6 px-10 rounded-xl font-orbitron"
               >
