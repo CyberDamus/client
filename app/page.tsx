@@ -44,6 +44,7 @@ export default function HomePage() {
   const [isGenerating, setIsGenerating] = useAtom(isGeneratingAtom)
   const [mintCost, setMintCost] = useState<{ serviceFee: number; networkFee: number; total: number } | null>(null)
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({})
+  const [userQuery, setUserQuery] = useState<string>('')
 
   // Ref for debouncing - prevents rapid successive calls
   const lastCallTimeRef = useRef<number>(0)
@@ -110,13 +111,15 @@ export default function HomePage() {
         return
       }
 
-      // 3. Mint fortune token
+      // 3. Mint fortune token with optional user query
       toast.info('Minting fortune token... (this may take 30-60 seconds)')
+      const queryToSend = userQuery.trim() || undefined
       const result = await mintFortuneTokenWithRetry(
         connection,
         publicKey,
         signTransaction,
-        1
+        queryToSend,
+        3 // maxRetries
       )
 
       toast.success(
@@ -236,11 +239,42 @@ export default function HomePage() {
 
         {/* STATE 2: Wallet connected, no reading yet */}
         {isWalletConnected && !hasReading && (
-          <div className="text-center space-y-6">
+          <div className="text-center space-y-6 w-full max-w-md">
             <div className="text-6xl mb-4 animate-float">🔮</div>
             <h1 className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyber-primary to-cyber-accent">
               Draw Your Fortune
             </h1>
+
+            {/* User Query Input */}
+            <div className="text-left space-y-2">
+              <label htmlFor="userQuery" className="block text-sm text-slate-400 px-1">
+                Ask the Oracle (optional)
+              </label>
+              <textarea
+                id="userQuery"
+                value={userQuery}
+                onChange={(e) => {
+                  const value = e.target.value
+                  // Enforce 256 character limit
+                  if (value.length <= 256) {
+                    setUserQuery(value)
+                  }
+                }}
+                placeholder="What question weighs on your mind? The cosmos listens..."
+                maxLength={256}
+                rows={3}
+                className="w-full px-4 py-3 bg-cyber-surface/50 border border-cyber-primary/30 rounded-lg text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-cyber-primary/60 focus:ring-2 focus:ring-cyber-primary/20 transition-all resize-none font-orbitron text-sm"
+              />
+              <div className="flex justify-between items-center px-1">
+                <span className="text-xs text-slate-500">
+                  Your question influences the card selection
+                </span>
+                <span className={`text-xs ${userQuery.length > 230 ? 'text-cyber-accent' : 'text-slate-500'}`}>
+                  {userQuery.length}/256
+                </span>
+              </div>
+            </div>
+
             <BgAnimateButton
               onClick={handleDrawCards}
               disabled={isGenerating}

@@ -17,6 +17,7 @@ import {
   MINT_FEE_LAMPORTS,
   PROGRAM_ID,
   RENT_SYSVAR_ID,
+  SLOT_HASHES_SYSVAR_ID,
   SYSTEM_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
   getMintAccountSize,
@@ -122,14 +123,17 @@ export async function simulateMintTransaction(
  * 1. Creates a new mint account (client-side keypair)
  * 2. Calls MintFortuneToken instruction
  *    - Transfers 0.01 SOL fee to treasury
- *    - Generates 3 Tarot cards on-chain
+ *    - Generates 3 Tarot cards on-chain (influenced by user query)
  *    - Initializes Token-2022 with Metadata Extension
  *    - Mints 1 token to user's ATA
+ *
+ * @param userQuery - Optional personalization query (max 256 characters)
  */
 export async function mintFortuneToken(
   connection: Connection,
   userPublicKey: PublicKey,
-  signTransaction: (tx: Transaction) => Promise<Transaction>
+  signTransaction: (tx: Transaction) => Promise<Transaction>,
+  userQuery?: string
 ): Promise<MintResult> {
   // 1. Get Oracle data
   const oracle = await getOracleData(connection)
@@ -170,21 +174,22 @@ export async function mintFortuneToken(
     programId: TOKEN_2022_PROGRAM_ID,
   })
 
-  // 7. Create MintFortuneToken instruction
-  const instructionData = serializeMintFortuneTokenInstruction()
+  // 7. Create MintFortuneToken instruction with optional user query
+  const instructionData = serializeMintFortuneTokenInstruction(userQuery)
 
   const mintFortuneIx = new TransactionInstruction({
     programId: PROGRAM_ID,
     keys: [
-      { pubkey: oraclePDA, isSigner: false, isWritable: true }, // Oracle account
-      { pubkey: userPublicKey, isSigner: true, isWritable: true }, // User (payer)
-      { pubkey: oracle.treasury, isSigner: false, isWritable: true }, // Treasury
-      { pubkey: mintKeypair.publicKey, isSigner: true, isWritable: true }, // Mint account
-      { pubkey: userTokenAccount, isSigner: false, isWritable: true }, // User ATA
-      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false }, // Token-2022
-      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }, // ATA program
-      { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false }, // System program
-      { pubkey: RENT_SYSVAR_ID, isSigner: false, isWritable: false }, // Rent sysvar
+      { pubkey: oraclePDA, isSigner: false, isWritable: true }, // 0. Oracle account
+      { pubkey: userPublicKey, isSigner: true, isWritable: true }, // 1. User (payer)
+      { pubkey: oracle.treasury, isSigner: false, isWritable: true }, // 2. Treasury
+      { pubkey: mintKeypair.publicKey, isSigner: true, isWritable: true }, // 3. Mint account
+      { pubkey: userTokenAccount, isSigner: false, isWritable: true }, // 4. User ATA
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false }, // 5. Token-2022
+      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }, // 6. ATA program
+      { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false }, // 7. System program
+      { pubkey: RENT_SYSVAR_ID, isSigner: false, isWritable: false }, // 8. Rent sysvar
+      { pubkey: SLOT_HASHES_SYSVAR_ID, isSigner: false, isWritable: false }, // 9. SlotHashes sysvar
     ],
     data: instructionData,
   })
@@ -318,13 +323,14 @@ export async function mintFortuneTokenWithRetry(
   connection: Connection,
   userPublicKey: PublicKey,
   signTransaction: (tx: Transaction) => Promise<Transaction>,
+  userQuery?: string,
   maxRetries = 3
 ): Promise<MintResult> {
   let lastError: unknown
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await mintFortuneToken(connection, userPublicKey, signTransaction)
+      return await mintFortuneToken(connection, userPublicKey, signTransaction, userQuery)
     } catch (error) {
       lastError = error
       console.error(`Attempt ${attempt} failed:`, error)

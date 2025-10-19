@@ -22,6 +22,9 @@ export const SYSTEM_PROGRAM_ID = new PublicKey('11111111111111111111111111111111
 // Rent Sysvar ID
 export const RENT_SYSVAR_ID = new PublicKey('SysvarRent111111111111111111111111111111111')
 
+// SlotHashes Sysvar ID (used for entropy in card generation)
+export const SLOT_HASHES_SYSVAR_ID = new PublicKey('SysvarS1otHashes111111111111111111111111111')
+
 // Memo Program ID (official Solana program for adding text notes to transactions)
 // Used to make each transaction unique even with identical blockhash
 export const MEMO_PROGRAM_ID = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr')

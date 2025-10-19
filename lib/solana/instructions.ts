@@ -17,14 +17,53 @@ export enum CyberdamusInstruction {
 }
 
 /**
- * Serialize MintFortuneToken instruction
- * No arguments needed - just the discriminator byte
+ * Serialize MintFortuneToken instruction with optional user query
+ *
+ * @param userQuery - Optional personalization query (max 256 UTF-8 characters)
+ * @returns Borsh-serialized instruction data
+ *
+ * Format:
+ * - [discriminator, 0] if userQuery is undefined (None)
+ * - [discriminator, 1, length_u32_LE, ...utf8_bytes] if userQuery is provided (Some)
  */
-export function serializeMintFortuneTokenInstruction(): Buffer {
-  // MintFortuneToken is enum variant 1
-  // In Borsh, enum is serialized as u8 discriminator + variant data
-  // MintFortuneToken has no data, so just [1]
-  return Buffer.from([CyberdamusInstruction.MintFortuneToken])
+export function serializeMintFortuneTokenInstruction(userQuery?: string): Buffer {
+  // Validate user query length (max 256 characters as per contract)
+  if (userQuery !== undefined && userQuery.length > 256) {
+    throw new Error('User query must be 256 characters or less')
+  }
+
+  // Start with discriminator
+  const discriminator = CyberdamusInstruction.MintFortuneToken
+
+  // Case 1: None (no user query)
+  if (userQuery === undefined || userQuery === null || userQuery === '') {
+    return Buffer.from([discriminator, 0x00])
+  }
+
+  // Case 2: Some (with user query)
+  const queryBytes = Buffer.from(userQuery, 'utf-8')
+  const queryLength = queryBytes.length
+
+  // Allocate buffer: discriminator (1) + Some flag (1) + length (4) + data
+  const buffer = Buffer.alloc(1 + 1 + 4 + queryLength)
+  let offset = 0
+
+  // Write discriminator
+  buffer[offset] = discriminator
+  offset += 1
+
+  // Write Some flag (0x01)
+  buffer[offset] = 0x01
+  offset += 1
+
+  // Write string length (u32 LE)
+  buffer.writeUInt32LE(queryLength, offset)
+  offset += 4
+
+  // Write UTF-8 bytes
+  queryBytes.copy(buffer, offset)
+
+  return buffer
 }
 
 /**
