@@ -1,8 +1,8 @@
 "use client"
 
+import AnimatedBackground from "@/components/client/AnimatedBackground"
 import { BgAnimateButton } from "@/components/ui/bg-animate-button"
 import { MultiStepLoader } from "@/components/ui/multi-step-loader"
-import { SparklesCore } from "@/components/ui/sparkles"
 import {
   calculateMintCost,
   checkOracleStatus,
@@ -194,19 +194,8 @@ export default function HomePage() {
 
   return (
     <div className="relative min-h-screen w-full bg-cyber-bg">
-      {/* Simple gradient background - NO BLOB! */}
-      <div className="fixed inset-0 bg-gradient-to-br from-cyber-bg via-purple-950/20 to-cyber-bg" />
-
-      {/* Sparkles - only stars, no blob */}
-      <SparklesCore
-        id="tsparticles-home"
-        background="transparent"
-        minSize={0.6}
-        maxSize={1.4}
-        particleDensity={100}
-        className="fixed inset-0 z-0"
-        particleColor="#8b5cf6"
-      />
+      {/* Memoized animated background - prevents re-renders on input */}
+      <AnimatedBackground />
 
       {/* TODO: check if loader ok */}
       <MultiStepLoader
@@ -250,21 +239,45 @@ export default function HomePage() {
               <label htmlFor="userQuery" className="block text-sm text-slate-400 px-1">
                 Ask the Oracle (optional)
               </label>
-              <textarea
-                id="userQuery"
-                value={userQuery}
-                onChange={(e) => {
-                  const value = e.target.value
-                  // Enforce 256 character limit
-                  if (value.length <= 256) {
-                    setUserQuery(value)
-                  }
-                }}
-                placeholder="What question weighs on your mind? The cosmos listens..."
-                maxLength={256}
-                rows={3}
-                className="w-full px-4 py-3 bg-cyber-surface/50 border border-cyber-primary/30 rounded-lg text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-cyber-primary/60 focus:ring-2 focus:ring-cyber-primary/20 transition-all resize-none font-orbitron text-sm"
-              />
+              <div className="relative">
+                <textarea
+                  id="userQuery"
+                  value={userQuery}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    // Enforce 256 character limit
+                    if (value.length <= 256) {
+                      setUserQuery(value)
+                    }
+                  }}
+                  placeholder="What question weighs on your mind? The cosmos listens..."
+                  maxLength={256}
+                  rows={3}
+                  className="w-full px-4 py-3 pr-10 bg-cyber-surface/50 border border-cyber-primary/30 rounded-lg text-slate-300 placeholder:text-slate-500 focus:outline-none focus:border-cyber-primary/60 focus:ring-2 focus:ring-cyber-primary/20 transition-all resize-none font-orbitron text-sm"
+                />
+                {/* Clear button - only shown when there's text */}
+                {userQuery.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setUserQuery('')}
+                    className="absolute top-2 right-2 p-1.5 rounded-md text-slate-400 hover:text-cyber-accent hover:bg-cyber-primary/10 transition-colors"
+                    aria-label="Clear text"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
               <div className="flex justify-between items-center px-1">
                 <span className="text-xs text-slate-500">
                   Your question influences the card selection
@@ -385,13 +398,12 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Draw Again Button */}
+            {/* Draw Again Button - Returns to form (doesn't mint immediately) */}
             <div className="flex justify-center pb-12">
               <BgAnimateButton
-                onClick={handleDrawCards}
+                onClick={() => setCurrentReading(null)}
                 disabled={isGenerating}
                 className="text-xl py-8 px-16 rounded-xl font-orbitron glow-border"
-              // className="text-lg py-6 px-10 rounded-xl font-orbitron"
               >
                 ⚡ Decrypt Again
               </BgAnimateButton>

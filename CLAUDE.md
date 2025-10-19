@@ -119,7 +119,7 @@ const result = await mintFortuneTokenWithRetry(
   connection,
   publicKey,
   signTransaction,
-  3 // max retries
+  1 // max retries - MUST be 1 (see critical note below)
 )
 
 // Returns: { signature, mint, fortuneNumber }
@@ -131,6 +131,17 @@ const result = await mintFortuneTokenWithRetry(
 - ✅ Transaction simulation (dry-run)
 - ✅ Retry logic (exponential backoff)
 - ✅ User-friendly error messages via toast
+
+**⚠️ CRITICAL - Retry Configuration:**
+> **maxRetries MUST ALWAYS be set to 1** (NOT 2 or 3!)
+>
+> Automatic retries with short intervals on devnet cause "already processed" errors due to RPC blockhash caching (5-10 seconds). When maxRetries > 1:
+> - Attempt 1 fails → waits 5s → Attempt 2 starts
+> - Attempt 2 gets same cached blockhash → RPC sees duplicate transaction → "already processed" error
+>
+> With maxRetries = 1, user manually retries after seeing error (10-20s delay), ensuring fresh blockhash.
+>
+> **Do NOT change this value without thorough testing on devnet!**
 
 ### Remaining TODOs
 - ✅ **Metadata parsing**: Extract real card data from Token-2022 metadata after mint (COMPLETED)
@@ -220,7 +231,7 @@ try {
     connection,
     publicKey,
     signTransaction,
-    3 // max retries
+    1 // max retries - CRITICAL: MUST be 1 (NOT 2 or 3!)
   )
 
   console.log('Minted!', result.signature)
