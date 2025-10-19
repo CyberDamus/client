@@ -128,12 +128,14 @@ export async function simulateMintTransaction(
  *    - Mints 1 token to user's ATA
  *
  * @param userQuery - Optional personalization query (max 256 characters)
+ * @param attemptNumber - Retry attempt number for guaranteed memo uniqueness
  */
 export async function mintFortuneToken(
   connection: Connection,
   userPublicKey: PublicKey,
   signTransaction: (tx: Transaction) => Promise<Transaction>,
-  userQuery?: string
+  userQuery?: string,
+  attemptNumber: number = 1
 ): Promise<MintResult> {
   // 1. Get Oracle data
   const oracle = await getOracleData(connection)
@@ -203,11 +205,12 @@ export async function mintFortuneToken(
   // PROBLEM: Solana RPC nodes cache getLatestBlockhash() for 2-4 seconds
   // If user clicks rapidly or retry happens, both calls get SAME blockhash from cache
   // Solana identifies duplicate by: blockhash + accounts + instruction data
-  // SOLUTION: Add Memo with unique data (timestamp + random) to make each transaction unique
-  // Format: "CyberDamus-{timestamp}-{random}" creates unique signature even with same blockhash
+  // SOLUTION: Add Memo with unique data (timestamp + random + attempt) to make each transaction unique
+  // Format: "CyberDamus-{timestamp}-{random}-a{attempt}" creates unique signature even with same blockhash
+  // Adding attempt number ensures memo is DIFFERENT on each retry even if timestamps are close
   const memoInstruction = new TransactionInstruction({
     keys: [{ pubkey: userPublicKey, isSigner: true, isWritable: false }],
-    data: Buffer.from(`CyberDamus-${Date.now()}-${Math.random()}`, 'utf-8'),
+    data: Buffer.from(`CyberDamus-${Date.now()}-${Math.random()}-a${attemptNumber}`, 'utf-8'),
     programId: MEMO_PROGRAM_ID,
   })
 
@@ -260,25 +263,27 @@ export async function mintFortuneToken(
 }
 
 /**
- * Parse error from SendTransactionError
+ * Parse error from SendTransactionError with detailed categorization
  */
 export function parseMintError(error: unknown): MintError {
   if (error instanceof SendTransactionError) {
     const logs = error.logs || []
+    const errorMsg = error.message.toLowerCase()
 
-    // Check for simulation failed / already processed (RPC cache/timing issue)
-    if (error.message.includes('Simulation failed') ||
-        error.message.includes('already been processed') ||
-        error.message.includes('This transaction has already been processed')) {
+    // 1. Already processed - RPC lag, transaction might be OK
+    if (errorMsg.includes('already been processed') ||
+      errorMsg.includes('already processed') ||
+      errorMsg.includes('this transaction has already been processed')) {
       return {
-        message: 'Transaction timing issue. Please try again.',
+        message: 'Transaction may have succeeded (RPC lag). Check your wallet in 30 seconds.',
         code: 'ALREADY_PROCESSED',
         logs,
       }
     }
 
-    // Check for insufficient funds
-    if (logs.some(log => log.includes('insufficient funds'))) {
+    // 2. Insufficient funds - clear user action needed
+    if (logs.some(log => log.toLowerCase().includes('insufficient funds')) ||
+      logs.some(log => log.toLowerCase().includes('insufficient lamports'))) {
       return {
         message: 'Insufficient funds. You need at least 0.02 SOL.',
         code: 'INSUFFICIENT_FUNDS',
@@ -286,16 +291,48 @@ export function parseMintError(error: unknown): MintError {
       }
     }
 
-    // Check for account already in use
+    // 3. Blockhash not found - transaction took too long
+    if (errorMsg.includes('blockhash not found') ||
+      errorMsg.includes('block height exceeded')) {
+      return {
+        message: 'Transaction expired. Please try again.',
+        code: 'BLOCKHASH_EXPIRED',
+        logs,
+      }
+    }
+
+    // 4. Account already in use - retry might help
     if (logs.some(log => log.includes('already in use'))) {
       return {
-        message: 'Mint account already exists. Please try again.',
+        message: 'Mint account conflict. Retrying...',
         code: 'ACCOUNT_IN_USE',
         logs,
       }
     }
 
-    // Generic transaction error
+    // 5. Network/RPC errors - retry might help
+    if (errorMsg.includes('networkerror') ||
+      errorMsg.includes('fetch failed') ||
+      errorMsg.includes('timeout')) {
+      return {
+        message: 'Network error. Check your connection.',
+        code: 'NETWORK_ERROR',
+        logs,
+      }
+    }
+
+    // 6. Simulation failed - check logs for details
+    if (errorMsg.includes('simulation failed')) {
+      // Try to extract specific error from logs
+      const specificError = logs.find(log => log.includes('Error:') || log.includes('failed:'))
+      return {
+        message: specificError || 'Transaction simulation failed. Please try again.',
+        code: 'SIMULATION_FAILED',
+        logs,
+      }
+    }
+
+    // 7. Generic transaction error
     return {
       message: error.message,
       code: 'TRANSACTION_ERROR',
@@ -311,7 +348,7 @@ export function parseMintError(error: unknown): MintError {
   }
 
   return {
-    message: 'An unknown error occurred',
+    message: 'An unknown error occurred. Please try again.',
     code: 'UNKNOWN_ERROR',
   }
 }
@@ -324,20 +361,34 @@ export async function mintFortuneTokenWithRetry(
   userPublicKey: PublicKey,
   signTransaction: (tx: Transaction) => Promise<Transaction>,
   userQuery?: string,
-  maxRetries = 3
+  maxRetries = 1 // don't touch this! should be only 1! 
 ): Promise<MintResult> {
   let lastError: unknown
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await mintFortuneToken(connection, userPublicKey, signTransaction, userQuery)
+      return await mintFortuneToken(connection, userPublicKey, signTransaction, userQuery, attempt)
     } catch (error) {
       lastError = error
       console.error(`Attempt ${attempt} failed:`, error)
 
+      // Check if this is "already processed" error - DON'T RETRY!
+      // This means transaction was already sent, just RPC is laggy
+      // Retrying will create a duplicate transaction
+      if (error instanceof SendTransactionError) {
+        const errorMsg = error.message.toLowerCase()
+        if (errorMsg.includes('already been processed') ||
+          errorMsg.includes('already processed') ||
+          errorMsg.includes('this transaction has already been processed')) {
+          console.log('⚠️ Transaction already processed - not retrying (RPC lag)')
+          throw error  // Don't retry - transaction is already sent!
+        }
+      }
+
       if (attempt < maxRetries) {
-        // Wait before retrying (exponential backoff)
-        const delay = Math.pow(2, attempt) * 1000
+        // Longer delay to ensure fresh blockhash (RPC caches 2-4 seconds)
+        // 5s, 10s instead of 2s, 4s
+        const delay = Math.pow(2, attempt) * 2500
         console.log(`Waiting ${delay}ms before retry...`)
         await new Promise(resolve => setTimeout(resolve, delay))
       }
