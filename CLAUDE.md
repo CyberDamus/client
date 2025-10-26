@@ -39,8 +39,14 @@ npx shadcn@latest add @cult-ui/<component-name>
 ### Pages & Routing (Next.js App Router)
 - **app/page.tsx**: Main oracle page with 3 states:
   1. Wallet not connected (disabled button)
-  2. Connected but no reading (draw cards button)
-  3. After reading (shows 3 cards + interpretation)
+  2. Connected but no reading (draw cards button with optional query input)
+  3. After reading (shows 3 cards with pixel dissolve animation + interpretation)
+     - Cards appear with backs visible
+     - Pixel dissolve animation reveals cards sequentially (1.5s delay between cards)
+     - 20x30 pixel grid (280x420px per card)
+- **app/test/page.tsx**: Test page for pixel dissolve animation
+  - Demonstrates card reveal animation with Start/Reset controls
+  - Same animation system as main page
 - **app/history/page.tsx**: NFT collection history
   - Desktop: Table view with clickable rows
   - Mobile: Card grid layout
@@ -60,6 +66,43 @@ npx shadcn@latest add @cult-ui/<component-name>
   - `tokenMetadata.ts`: Parse cards from Token-2022 metadata (format: "CyberDamus #19i20!07i")
   - `history.ts`: Fetch user's fortune collection with batch processing and GroupMemberPointer filtering
 - **Toast notifications**: Sonner for user feedback
+
+### Card Reveal Animation (Pixel Dissolve) (✅ IMPLEMENTED)
+Implemented in **app/page.tsx** (STATE 3) and **app/test/page.tsx**
+
+**Visual Effect:**
+- Cards initially appear with backs visible (card-back.png overlay)
+- Pixels dissolve from top to bottom with rotation and fade effects
+- Sequential reveal: one card completes before next begins (1.5s delay)
+- Each pixel falls independently with randomized timing within its row
+
+**Technical Implementation:**
+- **Pixel Grid**: 20 columns × 30 rows × 14px = 280×420px per card
+- **Animation States** (useState):
+  - `revealedCards: Set<number>` - tracks fully revealed cards
+  - `animatingCards: Set<number>` - tracks cards currently animating
+  - `showPixelAnimation: boolean` - controls animation lifecycle
+- **Pixel Data** (useMemo): Pre-calculated delays for 600 pixels per card
+  - Row-based delay: `row * 30ms` (top rows fall first)
+  - Random variance: `+ Math.random() * 200ms` (organic effect)
+- **CSS Animations**:
+  ```css
+  @keyframes pixelFall {
+    0%: translateY(0) rotate(0deg) opacity(1)
+    100%: translateY(600px) rotate(450deg) opacity(0)
+  }
+  @keyframes glow {
+    0%, 100%: box-shadow(0 0 4px purple)
+    50%: box-shadow(0 0 12px pink)
+  }
+  ```
+- **Performance**: CSS Grid layout, `will-change: transform, opacity`
+- **Auto-trigger**: useEffect watches `currentReading` changes (after mint)
+
+**Integration Points:**
+- Triggered automatically when `currentReading` is set (app/page.tsx:106-126)
+- Card back overlay fades out when animation starts (opacity transition)
+- Pixel grid removed from DOM after reveal completes (conditional rendering)
 
 ### Component System
 - **components/ui/**: 20+ UI components from @aceternity and @cult-ui registries
@@ -153,7 +196,13 @@ const result = await mintFortuneTokenWithRetry(
 - Avoid using BackgroundGradientAnimation component (removed due to performance issues)
 - SparklesCore is configured with `particleDensity={100}` for performance
 - MultiStepLoader shows 6 steps during 6-second card generation delay
-- Use Framer Motion for card reveal animations (planned Phase 3)
+- ✅ **Pixel Dissolve Animation** (implemented):
+  - CSS Grid-based layout (20×30 = 600 pixels per card)
+  - CSS keyframes (`pixelFall`, `glow`) for hardware-accelerated animations
+  - `will-change: transform, opacity` for optimization
+  - Pre-calculated delays (useMemo) to avoid runtime computation
+  - Conditional rendering removes pixel grid from DOM after animation
+  - No external animation libraries (pure CSS + React state)
 
 ### Responsive Design Patterns
 - Header: Truncate wallet address on mobile, show full on desktop
@@ -185,7 +234,7 @@ When replacing mock implementations:
 
 ## Project Status & Roadmap
 
-**Current Phase**: Phase 2 (Blockchain Integration) - ~90% Complete
+**Current Phase**: Phase 2 (Blockchain Integration) - ~95% Complete
 - ✅ Next.js 15 setup with TypeScript
 - ✅ 20 UI components from @aceternity + @cult-ui
 - ✅ Main oracle page with 3 states
@@ -201,13 +250,14 @@ When replacing mock implementations:
 - ✅ Transaction signatures and Solana Explorer links
 - ✅ IPFS URI extraction from additionalMetadata (past/present/future)
 - ✅ GroupMemberPointer extension filtering for collection membership
+- ✅ Pixel dissolve card reveal animation (main page + test page)
 
 **Phase 2 Remaining**:
 - [ ] IPFS image display (URIs already available in `cardImages` field)
 - [ ] Real AI/Oracle interpretation (currently using `generateMockInterpretation()`)
 
 **Future Phase**: Phase 3 (Polish & Features)
-- [ ] Advanced animations (card shuffle, flip reveal)
+- [ ] Additional animation variations (card shuffle, alternative reveal effects)
 - [ ] Social sharing functionality
 - [ ] Error boundaries and comprehensive error handling
 - [ ] WebSocket for real-time transaction updates
