@@ -1,6 +1,7 @@
 # Independent projects (separate git repos)
 cyberdamus_nft/
 client/
+ollama-setup/
 
 # Large media files
 Cards/
