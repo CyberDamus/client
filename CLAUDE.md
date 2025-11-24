@@ -23,10 +23,36 @@ npm run start
 # Run ESLint
 npm run lint
 
+# Database commands (Vercel Postgres + Prisma)
+npm run db:push     # Push schema to database
+npm run db:studio   # Open Prisma Studio (GUI)
+
 # Add UI components from registries
 npx shadcn@latest add @aceternity/<component-name>
 npx shadcn@latest add @cult-ui/<component-name>
 ```
+
+## Database Setup (Quick Start)
+
+**Vercel Postgres** is used for storing user queries and interpretations.
+
+**Setup (30 seconds):**
+```bash
+# 1. Create database in Vercel Dashboard:
+#    Storage → Create Database → Postgres
+
+# 2. Pull environment variables locally:
+vercel link
+vercel env pull .env.local
+
+# 3. Push Prisma schema to database:
+npm run db:push
+
+# 4. (Optional) View database:
+npm run db:studio
+```
+
+**See `DATABASE_SETUP.md` for detailed instructions.**
 
 ## Architecture
 
@@ -66,6 +92,42 @@ npx shadcn@latest add @cult-ui/<component-name>
   - `tokenMetadata.ts`: Parse cards from Token-2022 metadata (format: "CyberDamus #19i20!07i")
   - `history.ts`: Fetch user's fortune collection with batch processing and GroupMemberPointer filtering
 - **Toast notifications**: Sonner for user feedback
+
+### Database & API (✅ IMPLEMENTED)
+**Vercel Postgres** (Neon-powered) stores user queries and interpretations.
+
+**Database:**
+- **prisma/schema.prisma**: Fortune model with blockchain + user data
+- **lib/db.ts**: Prisma client singleton
+- **Schema**: `fortunes` table with status tracking
+  - `pending_mint` → draft created, waiting for mint
+  - `pending_interpretation` → mint succeeded, waiting for AI (Phase 2)
+  - `completed` → fully processed
+  - `failed` → mint failed
+
+**API Routes:**
+- `POST /api/fortune/draft` - Create draft before mint
+- `PATCH /api/fortune/update` - Update after mint (success/failure)
+- `GET /api/fortune/[mintAddress]` - Get fortune by mint address
+- `GET /api/cron/cleanup` - Daily cleanup of old pending_mint (24+ hours)
+
+**Flow:**
+1. User clicks "Decrypt Your Fate"
+2. Create draft (`POST /api/fortune/draft`) → returns `draftId`
+3. Mint fortune token on blockchain
+4. Update draft (`PATCH /api/fortune/update`) with cards, signature, status
+5. (Phase 2) AI generates interpretation → status = `completed`
+
+**Controlled Loading (7 steps):**
+- 🔮 Preparing your reading... (draft create)
+- 🌌 Connecting to the Oracle... (checkOracleStatus)
+- ⚖️ Validating cosmic balance... (checkUserBalance)
+- ✨ Minting fortune token... (mintFortuneToken)
+- 📖 Reading blockchain prophecy... (parseCards)
+- 💾 Saving to cosmic records... (update draft)
+- ✅ Revelation complete!
+
+**See `DATABASE_SETUP.md` for setup instructions.**
 
 ### Card Reveal Animation (Pixel Dissolve) (✅ IMPLEMENTED)
 Implemented in **app/page.tsx** (STATE 3) and **app/test/page.tsx**
@@ -189,13 +251,16 @@ const result = await mintFortuneTokenWithRetry(
 ### Remaining TODOs
 - ✅ **Metadata parsing**: Extract real card data from Token-2022 metadata after mint (COMPLETED)
 - ✅ **History Page**: Query user's Token-2022 tokens and display collection (COMPLETED)
+- ✅ **Database integration**: Store user queries and fortune data (COMPLETED - Vercel Postgres)
+- ✅ **API Routes**: Draft creation, updates, and retrieval (COMPLETED)
+- ✅ **Controlled loading**: Real-time progress with 7 steps (COMPLETED)
 - [ ] **Card images**: Display IPFS images (URIs already extracted from additionalMetadata)
-- [ ] **Interpretation**: Real AI/Oracle interpretation (currently using mock generation)
+- [ ] **Interpretation**: Real AI/Oracle interpretation (currently using mock generation - Phase 2)
 
 ### Animation & Performance
 - Avoid using BackgroundGradientAnimation component (removed due to performance issues)
 - SparklesCore is configured with `particleDensity={100}` for performance
-- MultiStepLoader shows 6 steps during 6-second card generation delay
+- MultiStepLoader shows 7 steps with controlled progress (real-time, not timer-based)
 - ✅ **Pixel Dissolve Animation** (implemented):
   - CSS Grid-based layout (20×30 = 600 pixels per card)
   - CSS keyframes (`pixelFall`, `glow`) for hardware-accelerated animations
@@ -234,7 +299,8 @@ When replacing mock implementations:
 
 ## Project Status & Roadmap
 
-**Current Phase**: Phase 2 (Blockchain Integration) - ~95% Complete
+**Current Phase**: Phase 2.5 (Database Integration) - COMPLETE ✅
+**Next Phase**: Phase 3 (AI Interpretation)
 - ✅ Next.js 15 setup with TypeScript
 - ✅ 20 UI components from @aceternity + @cult-ui
 - ✅ Main oracle page with 3 states
@@ -252,11 +318,21 @@ When replacing mock implementations:
 - ✅ GroupMemberPointer extension filtering for collection membership
 - ✅ Pixel dissolve card reveal animation (main page + test page)
 
-**Phase 2 Remaining**:
-- [ ] IPFS image display (URIs already available in `cardImages` field)
-- [ ] Real AI/Oracle interpretation (currently using `generateMockInterpretation()`)
+**Phase 2.5 COMPLETE** (Database Integration):
+- ✅ Vercel Postgres + Prisma setup
+- ✅ Fortune model with status tracking (pending_mint → pending_interpretation → completed)
+- ✅ API routes: draft creation, update, retrieval, cleanup
+- ✅ Controlled loading with 7 real-time steps
+- ✅ Database integration in mint flow
+- ✅ Daily cron job for cleanup
 
-**Future Phase**: Phase 3 (Polish & Features)
+**Phase 3** (AI & Polish - IN PROGRESS):
+- [ ] AI interpretation (OpenAI/Claude API integration)
+- [ ] Auto-trigger interpretation after mint
+- [ ] IPFS image display (URIs already available in `cardImages` field)
+- [ ] History page integration with database queries
+
+**Future Phase**: Phase 4 (Advanced Features)
 - [ ] Additional animation variations (card shuffle, alternative reveal effects)
 - [ ] Social sharing functionality
 - [ ] Error boundaries and comprehensive error handling
@@ -354,6 +430,72 @@ const fortunes = await fetchUserFortunes(connection, publicKey, 10)
 
 ## Related Documentation
 - **README.md**: Full project documentation with component lists and design system
+- **DATABASE_SETUP.md**: Complete guide for Vercel Postgres setup
 - **Smart Contract**: `/cyberdamus_nft` (parent directory, branch: `token_2022_version`)
 - **Whitepaper**: `/WHITEPAPER.md` (parent directory) - detailed Token-2022 architecture
 - **FINAL_IMPLEMENTATION.md**: (parent directory) - contract implementation details
+
+---
+
+## 📅 Recent Updates (January 30, 2025)
+
+### Phase 2.5 - Database Integration (COMPLETED)
+
+**What was implemented:**
+
+1. **Database Setup (Vercel Postgres + Prisma)**
+   - Created `prisma/schema.prisma` with Fortune model
+   - Setup `lib/db.ts` (Prisma client singleton)
+   - Database tracks: wallet, query, cards, mint address, status, interpretation
+
+2. **API Routes (4 endpoints)**
+   - `POST /api/fortune/draft` - Create draft before mint
+   - `PATCH /api/fortune/update` - Update after mint (success/failure)
+   - `GET /api/fortune/[mintAddress]` - Get fortune by mint address
+   - `GET /api/cron/cleanup` - Daily cleanup of old pending_mint records
+
+3. **UI Integration (Controlled Loading)**
+   - Updated `app/page.tsx` with 7-step controlled loader
+   - Real-time progress (not timer-based)
+   - Steps: Prepare → Oracle → Balance → Mint → Parse → Save → Complete
+   - Database calls integrated into mint flow
+
+4. **Status Tracking System**
+   - `pending_mint` - draft created, waiting for mint
+   - `pending_interpretation` - mint succeeded, ready for AI
+   - `completed` - fully processed (Phase 3)
+   - `failed` - mint failed, error logged
+
+5. **Vercel Configuration**
+   - Created `vercel.json` with daily cron job (midnight UTC)
+   - Automatic cleanup of orphaned drafts (24+ hours old)
+   - Environment variables auto-configured via Vercel Postgres
+
+6. **Documentation**
+   - Complete `DATABASE_SETUP.md` guide
+   - Updated `CLAUDE.md` with database architecture
+   - Updated `README.md` with new commands and status
+
+**Key Features:**
+- ✅ User queries saved to database (optional, always stored if provided)
+- ✅ Cards and fortune data persisted for future AI interpretation
+- ✅ Error handling with fallback (failed mints recorded)
+- ✅ Prisma Studio for easy database inspection (`npm run db:studio`)
+
+**Quick Commands:**
+```bash
+# View database
+npm run db:studio
+
+# Push schema changes
+npm run db:push
+
+# Deploy to Vercel
+vercel --prod
+```
+
+**Next Steps (Phase 3):**
+- AI interpretation integration (OpenAI/Claude API)
+- Auto-trigger interpretation after successful mint
+- Display IPFS card images
+- History page integration with database queries

@@ -1,0 +1,46 @@
+// Prisma schema for CyberDamus Fortune Storage
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Fortune {
+  id              Int       @id @default(autoincrement())
+
+  // Blockchain data (NULL until mint succeeds)
+  mintAddress     String?   @unique @map("mint_address") @db.VarChar(44)
+  walletAddress   String    @map("wallet_address") @db.VarChar(44)
+  fortuneNumber   Int?      @map("fortune_number")
+  signature       String?   @db.VarChar(88)
+
+  // User input (saved if provided)
+  userQuery       String?   @map("user_query") @db.Text
+
+  // Cards data from Token-2022 metadata (NULL until mint)
+  cards           Json?     // [{id: 19, inverted: true}, {id: 20, inverted: false}, {id: 7, inverted: true}]
+
+  // AI interpretation (Phase 3 - Docker + Polling implementation)
+  interpretation  String?   @db.Text
+  aiStatus        String    @default("pending") @map("ai_status") @db.VarChar(20)  // pending | processing | completed | failed
+  aiError         String?   @map("ai_error") @db.Text
+
+  // Status tracking
+  status          String    @db.VarChar(30)  // pending_mint | pending_interpretation | completed | failed
+  errorMessage    String?   @map("error_message") @db.Text
+
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Indexes for fast queries
+  @@index([walletAddress])
+  @@index([mintAddress])
+  @@index([status])
+  @@index([aiStatus])  // For AI queue processing
+  @@map("fortunes")
+}

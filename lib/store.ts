@@ -109,20 +109,21 @@ export const MOCK_CARDS = [
   { id: 77, name: "King of Pentacles", meaning: "Abundance and security" },
 ]
 
-// TODO: remove after real AI/Oracle implementation
-export const MOCK_INTERPRETATIONS = [
-  "The cosmic energies reveal a journey of transformation ahead. Your past experiences have prepared you for the challenges you now face. Trust in the process and embrace the changes coming your way.",
-  "The blockchain of fate shows convergence of powerful forces in your life. What seems like conflict is actually the universe aligning opportunities. Stay vigilant and act decisively when the moment arrives.",
-  "Ancient wisdom flows through the digital ether to guide you. The cards speak of balance between material and spiritual realms. Your intuition will be your greatest asset in the days to come.",
-  "The oracle sees a pattern of renewal emerging from chaos. Past struggles have forged your strength, and now the universe opens doors you thought were closed. Patience will be rewarded.",
-  "Cybernetic prophecy indicates a shift in consciousness approaching. The energies surrounding you are volatile but full of potential. Embrace uncertainty as the catalyst for growth.",
-  "The tarot's encryption reveals hidden opportunities masked as obstacles. Your present situation is a test of will and wisdom. Those who understand the deeper meaning will find their path illuminated.",
-  "Quantum entanglement of past, present, and future converges in this reading. The universe is preparing you for a significant breakthrough. Stay open to unexpected connections and synchronicities.",
-  "The digital spirits whisper of transformation through surrender. What you release now creates space for abundance. Trust that the cosmos has a greater plan unfolding.",
-]
+// Fallback interpretation (simple card listing, no AI interpretation)
+// Used when Ollama API is unavailable or times out
+export function generateMockInterpretation(cards: Array<{
+  id: number
+  name: string
+  meaning: string
+  inverted?: boolean
+}>): string {
+  const positions = ['Past', 'Present', 'Future']
 
-// TODO: remove after real implementation
-export function generateMockInterpretation(cards: typeof MOCK_CARDS): string {
-  const randomIndex = Math.floor(Math.random() * MOCK_INTERPRETATIONS.length)
-  return MOCK_INTERPRETATIONS[randomIndex]
+  const cardDescriptions = cards.map((card, index) => {
+    const orientation = card.inverted ? 'inverted' : 'upright'
+    const position = positions[index] || `Card ${index + 1}`
+    return `${position}: ${card.name} (${orientation})`
+  }).join('\n')
+
+  return `Your cards have been drawn:\n\n${cardDescriptions}\n\nThe AI Oracle is currently unavailable. Please try refreshing the page to receive your full interpretation.`
 }

@@ -28,12 +28,13 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 const loadingSteps = [
-  { text: "Connecting to the Oracle..." },
-  { text: "Shuffling the cosmic deck..." },
-  { text: "Drawing your cards from the ether..." },
-  { text: "Interpreting the blockchain of fate..." },
-  { text: "Minting your fortune NFT..." },
-  { text: "Reading complete!" },
+  { text: "🔮 Preparing your reading..." },
+  { text: "🌌 Connecting to the Oracle..." },
+  { text: "⚖️ Validating cosmic balance..." },
+  { text: "✨ Minting fortune token..." },
+  { text: "📖 Reading blockchain prophecy..." },
+  { text: "💾 Saving to cosmic records..." },
+  { text: "✅ Revelation complete!" },
 ]
 
 // Pixel grid configuration for card animation (same as test page)
@@ -52,10 +53,19 @@ export default function HomePage() {
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({})
   const [userQuery, setUserQuery] = useState<string>('')
 
+  // Controlled loading state for real-time progress
+  const [loadingState, setLoadingState] = useState({
+    currentStep: 0,
+    totalSteps: loadingSteps.length,
+  })
+
   // Animation states for pixel dissolve effect
   const [revealedCards, setRevealedCards] = useState<Set<number>>(new Set())
   const [animatingCards, setAnimatingCards] = useState<Set<number>>(new Set())
   const [showPixelAnimation, setShowPixelAnimation] = useState(false)
+
+  // AI interpretation loading state
+  const [isLoadingInterpretation, setIsLoadingInterpretation] = useState(false)
 
   // Ref for debouncing - prevents rapid successive calls
   const lastCallTimeRef = useRef<number>(0)
@@ -125,12 +135,143 @@ export default function HomePage() {
     }
   }, [currentReading, showPixelAnimation])
 
+  // Reconnect protection: check for pending fortunes on mount/wallet change
+  useEffect(() => {
+    if (!publicKey) return
+
+    const checkPendingFortune = async () => {
+      try {
+        const response = await fetch(`/api/fortune/pending?wallet=${publicKey.toBase58()}`)
+        const data = await response.json()
+
+        if (data.success && data.fortune) {
+          const fortune = data.fortune
+          console.log(`[Reconnect] Found pending fortune ${fortune.id}, status: ${fortune.aiStatus}`)
+
+          // Show notification about pending fortune
+          toast.info(
+            'Resuming pending fortune...',
+            {
+              description: `Your previous reading is ${fortune.aiStatus}. Please wait.`,
+              duration: 5000
+            }
+          )
+
+          // Note: We don't auto-resume polling here because we don't have the cards data
+          // User needs to wait for the polling to complete from the original session
+          // or refresh and check history page
+        }
+      } catch (error) {
+        console.error('[Reconnect] Failed to check pending fortune:', error)
+      }
+    }
+
+    checkPendingFortune()
+  }, [publicKey])
+
   // Open wallet connection modal
   const handleConnectWallet = () => {
     setVisible(true)
   }
 
-  // Real blockchain implementation with debouncing
+  // Build cyberpunk prefix for interpretation with card orientations
+  const buildInterpretationPrefix = (
+    cards: Array<{ id: number; name: string; meaning: string; inverted?: boolean }>,
+    userQuery: string
+  ): string => {
+    const positions = ['PAST', 'PRESENT', 'FUTURE']
+
+    const cardLines = cards.map((card, index) => {
+      const orientation = card.inverted ? 'INVERTED' : 'UPRIGHT'
+      const position = positions[index]
+      return `  ${position}: ${card.name} (${orientation})`
+    }).join('\n')
+
+    let prefix = `█▓▒░ TRANSMISSION RECEIVED ░▒▓█\n\nCards drawn from the digital deck:\n${cardLines}`
+
+    if (userQuery.trim()) {
+      prefix += `\n\nQuery intercepted: "${userQuery.trim()}"`
+    }
+
+    prefix += `\n\n█▓▒░ DECRYPTING DATA ░▒▓█`
+
+    return prefix
+  }
+
+  // Poll for AI interpretation (triggered automatically by /api/fortune/update)
+  const pollForAIInterpretation = async (
+    draftId: number,
+    cards: Array<{ id: number; name: string; meaning: string; inverted?: boolean }>,
+    userQuery: string
+  ) => {
+    setIsLoadingInterpretation(true)
+
+    try {
+      console.log(`[AI] Polling for interpretation (draft ${draftId})...`)
+
+      // Poll DB for results (5 second interval, 2 minute timeout)
+      const pollStartTime = Date.now()
+      const POLL_INTERVAL = 2000 // 2s
+      const POLL_TIMEOUT = 120000 // 2 minutes
+
+      while (Date.now() - pollStartTime < POLL_TIMEOUT) {
+        // Wait before polling
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL))
+
+        // Check DB for results (by ID)
+        const fortuneResponse = await fetch(`/api/fortune/by-id/${draftId}`)
+        const fortuneData = await fortuneResponse.json()
+
+        if (!fortuneData.success) {
+          console.warn('[AI Poll] Failed to fetch fortune:', fortuneData.error)
+          continue
+        }
+
+        const fortune = fortuneData.fortune
+
+        // Check status
+        if (fortune.aiStatus === 'completed' && fortune.interpretation) {
+          // Success! Build prefix and show interpretation
+          console.log(`[AI Poll] ✅ Completed! Received ${fortune.interpretation.length} chars`)
+          const prefix = buildInterpretationPrefix(cards, userQuery)
+
+          setCurrentReading(prev => prev ? {
+            ...prev,
+            interpretation: `${prefix}\n\n${fortune.interpretation}`
+          } : null)
+
+          setIsLoadingInterpretation(false)
+          return
+        }
+
+        if (fortune.aiStatus === 'failed') {
+          // AI failed, use fallback
+          console.warn(`[AI Poll] AI failed:`, fortune.aiError)
+          throw new Error(fortune.aiError || 'AI generation failed')
+        }
+
+        // Still processing, continue polling
+        console.log(`[AI Poll] Status: ${fortune.aiStatus}, waiting...`)
+      }
+
+      // Timeout reached
+      console.error('[AI Poll] Timeout after 2 minutes')
+      throw new Error('AI generation timed out')
+
+    } catch (error: any) {
+      // Error or timeout - use fallback
+      console.error('[AI] Error, using fallback:', error.message)
+      const prefix = buildInterpretationPrefix(cards, userQuery)
+      setCurrentReading(prev => prev ? {
+        ...prev,
+        interpretation: `${prefix}\n\n${generateMockInterpretation(cards)}`
+      } : null)
+    } finally {
+      setIsLoadingInterpretation(false)
+    }
+  }
+
+  // Real blockchain implementation with controlled loading and DB integration
   const handleDrawCards = async () => {
     if (!publicKey || !signTransaction) {
       toast.error('Please connect your wallet first')
@@ -147,41 +288,101 @@ export default function HomePage() {
     lastCallTimeRef.current = now
 
     setIsGenerating(true)
+    setLoadingState({ currentStep: 0, totalSteps: loadingSteps.length })
+
+    let draftId: number | null = null
 
     try {
-      // 1. Check Oracle status
-      toast.info('Checking Oracle status...')
+      // Step 0: Create draft in database
+      setLoadingState(prev => ({ ...prev, currentStep: 0 }))
+      const draftResponse = await fetch('/api/fortune/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: publicKey.toBase58(),
+          userQuery: userQuery.trim() || null,
+        }),
+      })
+
+      if (!draftResponse.ok) {
+        throw new Error('Failed to create fortune draft')
+      }
+
+      const draftData = await draftResponse.json()
+      draftId = (draftData.draftId as number) || 0
+
+      // Step 1: Check Oracle status
+      setLoadingState(prev => ({ ...prev, currentStep: 1 }))
       const oracleStatus = await checkOracleStatus(connection)
       if (!oracleStatus.ready) {
-        toast.error(`Oracle not ready: ${oracleStatus.error}`)
-        setIsGenerating(false)
-        return
+        throw new Error(`Oracle not ready: ${oracleStatus.error}`)
       }
 
-      // 2. Check user balance
-      toast.info('Checking balance...')
+      // Step 2: Check user balance
+      setLoadingState(prev => ({ ...prev, currentStep: 2 }))
       const balanceCheck = await checkUserBalance(connection, publicKey)
       if (!balanceCheck.sufficient) {
-        toast.error(
+        throw new Error(
           `Insufficient funds. You have ${balanceCheck.balance.toFixed(4)} SOL, need ${balanceCheck.required.toFixed(4)} SOL`
         )
-        setIsGenerating(false)
-        return
       }
 
-      // 3. Mint fortune token with optional user query
-      toast.info('Minting fortune token... (this may take 30-60 seconds)')
+      // Step 3: Mint fortune token
+      setLoadingState(prev => ({ ...prev, currentStep: 3 }))
       const queryToSend = userQuery.trim() || undefined
       const result = await mintFortuneTokenWithRetry(
         connection,
         publicKey,
         signTransaction,
         queryToSend,
-        3 // maxRetries
+        1 // maxRetries - MUST be 1!
       )
 
+      // Step 4: Parse cards from token metadata
+      setLoadingState(prev => ({ ...prev, currentStep: 4 }))
+      const parsedCards = await parseCardsFromToken(connection, result.mint)
+
+      // Map parsed cards to full card data with inverted flag
+      const selectedCards = parsedCards.map(({ id, inverted }) => ({
+        ...MOCK_CARDS[id],
+        inverted
+      }))
+
+      // Get fortune number from token metadata
+      const metadata = await getTokenMetadata(
+        connection,
+        result.mint,
+        'confirmed',
+        TOKEN_2022_PROGRAM_ID
+      )
+
+      const fortuneNumberStr = getAdditionalMetadataField(metadata, 'fortune_number')
+      const fortuneNumber = fortuneNumberStr ? parseInt(fortuneNumberStr, 10) : result.fortuneNumber
+
+      // Step 5: Update draft in database
+      setLoadingState(prev => ({ ...prev, currentStep: 5 }))
+      const updateResponse = await fetch('/api/fortune/update', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draftId,
+          mintAddress: result.mint.toBase58(),
+          fortuneNumber,
+          cards: parsedCards,
+          signature: result.signature,
+          status: 'pending_interpretation',
+        }),
+      })
+
+      if (!updateResponse.ok) {
+        console.error('Failed to update fortune draft (but mint succeeded)')
+      }
+
+      // Step 6: Complete
+      setLoadingState(prev => ({ ...prev, currentStep: 6 }))
+
       toast.success(
-        `Fortune #${result.fortuneNumber} minted successfully!`,
+        `Fortune #${fortuneNumber} revealed!`,
         {
           description: `Transaction: ${result.signature.slice(0, 8)}...`,
           action: {
@@ -193,58 +394,56 @@ export default function HomePage() {
         }
       )
 
-      // 4. Parse real cards from token metadata
-      toast.info('Reading your fortune from the blockchain...')
-      const parsedCards = await parseCardsFromToken(connection, result.mint)
-
-      // Map parsed cards to full card data with inverted flag
-      const selectedCards = parsedCards.map(({ id, inverted }) => ({
-        ...MOCK_CARDS[id],
-        inverted
-      }))
-
-      // 5. Get fortune number from token metadata (same as history page)
-      const metadata = await getTokenMetadata(
-        connection,
-        result.mint,
-        'confirmed',
-        TOKEN_2022_PROGRAM_ID
-      )
-
-      const fortuneNumberStr = getAdditionalMetadataField(metadata, 'fortune_number')
-      const fortuneNumber = fortuneNumberStr ? parseInt(fortuneNumberStr, 10) : result.fortuneNumber
-
+      // Show cards immediately with empty interpretation
       setCurrentReading({
         cards: selectedCards,
         timestamp: Date.now(),
-        interpretation: generateMockInterpretation(selectedCards),
-        signature: result.signature,  // Save signature for explorer link
-        fortuneNumber: fortuneNumber  // Save fortune number from metadata
+        interpretation: '', // Will be populated by AI or fallback
+        signature: result.signature,
+        fortuneNumber: fortuneNumber
       })
 
+      // Poll for AI interpretation (triggered automatically by /api/fortune/update)
+      pollForAIInterpretation(draftId, selectedCards, userQuery)
+
     } catch (error) {
-      console.error('Mint error:', error)
+      console.error('Fortune creation error:', error)
       const parsedError = parseMintError(error)
 
-      // Friendly message for "already processed" errors (RPC cache/timing issue)
-      // This happens when user delays wallet confirmation or RPC sees duplicate blockhash
+      // Update draft as failed if we have draftId
+      if (draftId) {
+        try {
+          await fetch('/api/fortune/update', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              draftId,
+              status: 'failed',
+              errorMessage: parsedError.message,
+            }),
+          })
+        } catch (updateError) {
+          console.error('Failed to update draft status:', updateError)
+        }
+      }
+
+      // User-friendly error messages
       if (parsedError.code === 'ALREADY_PROCESSED' || parsedError.code === 'SIMULATION_FAILED') {
         toast.warning('⚡ The cosmic connection flickered', {
           description: 'Your funds are safe. Give it another try!',
         })
       } else {
-        // Regular error handling for real issues
-        toast.error('Failed to mint fortune', {
+        toast.error('Failed to create fortune', {
           description: parsedError.message,
         })
       }
 
-      // Log detailed error for debugging
       if (parsedError.logs) {
         console.error('Transaction logs:', parsedError.logs)
       }
     } finally {
       setIsGenerating(false)
+      setLoadingState({ currentStep: 0, totalSteps: loadingSteps.length })
     }
   }
 
@@ -505,16 +704,35 @@ export default function HomePage() {
               ))}
             </div>
 
-            {/* TODO: remove after real AI/Oracle implementation - Oracle's Interpretation */}
+            {/* Oracle's Interpretation (AI or Fallback) */}
             <div className="max-w-3xl mx-auto mb-20 px-4">
               <div className="bg-cyber-surface/50 backdrop-blur border border-cyber-primary/30 rounded-lg p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <span className="text-2xl">🔮</span>
                   <h3 className="text-xl font-bold text-cyber-primary">Oracle&apos;s Interpretation</h3>
+                  {isLoadingInterpretation && (
+                    <span className="text-xs text-cyber-cyan animate-pulse">Consulting the AI Oracle...</span>
+                  )}
                 </div>
-                <p className="text-slate-300 leading-relaxed italic">
-                  {currentReading.interpretation}
-                </p>
+
+                {isLoadingInterpretation ? (
+                  /* Loading skeleton */
+                  <div className="space-y-3">
+                    <div className="h-4 bg-cyber-primary/20 rounded animate-pulse w-full"></div>
+                    <div className="h-4 bg-cyber-primary/20 rounded animate-pulse w-5/6"></div>
+                    <div className="h-4 bg-cyber-primary/20 rounded animate-pulse w-4/6"></div>
+                  </div>
+                ) : currentReading.interpretation ? (
+                  /* AI interpretation or fallback */
+                  <p className="text-slate-300 leading-relaxed italic whitespace-pre-wrap">
+                    {currentReading.interpretation}
+                  </p>
+                ) : (
+                  /* Empty state (shouldn't happen, but just in case) */
+                  <p className="text-slate-400 leading-relaxed italic">
+                    Preparing your interpretation...
+                  </p>
+                )}
               </div>
             </div>
 
