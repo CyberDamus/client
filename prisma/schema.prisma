@@ -24,8 +24,10 @@ model Fortune {
   // Cards data from Token-2022 metadata (NULL until mint)
   cards           Json?     // [{id: 19, inverted: true}, {id: 20, inverted: false}, {id: 7, inverted: true}]
 
-  // AI interpretation (Phase 2 - not implemented yet)
+  // AI interpretation (Phase 3 - Docker + Polling implementation)
   interpretation  String?   @db.Text
+  aiStatus        String    @default("pending") @map("ai_status") @db.VarChar(20)  // pending | processing | completed | failed
+  aiError         String?   @map("ai_error") @db.Text
 
   // Status tracking
   status          String    @db.VarChar(30)  // pending_mint | pending_interpretation | completed | failed
@@ -39,5 +41,6 @@ model Fortune {
   @@index([walletAddress])
   @@index([mintAddress])
   @@index([status])
+  @@index([aiStatus])  // For AI queue processing
   @@map("fortunes")
 }

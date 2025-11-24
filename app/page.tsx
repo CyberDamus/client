@@ -64,6 +64,9 @@ export default function HomePage() {
   const [animatingCards, setAnimatingCards] = useState<Set<number>>(new Set())
   const [showPixelAnimation, setShowPixelAnimation] = useState(false)
 
+  // AI interpretation loading state
+  const [isLoadingInterpretation, setIsLoadingInterpretation] = useState(false)
+
   // Ref for debouncing - prevents rapid successive calls
   const lastCallTimeRef = useRef<number>(0)
 
@@ -132,9 +135,140 @@ export default function HomePage() {
     }
   }, [currentReading, showPixelAnimation])
 
+  // Reconnect protection: check for pending fortunes on mount/wallet change
+  useEffect(() => {
+    if (!publicKey) return
+
+    const checkPendingFortune = async () => {
+      try {
+        const response = await fetch(`/api/fortune/pending?wallet=${publicKey.toBase58()}`)
+        const data = await response.json()
+
+        if (data.success && data.fortune) {
+          const fortune = data.fortune
+          console.log(`[Reconnect] Found pending fortune ${fortune.id}, status: ${fortune.aiStatus}`)
+
+          // Show notification about pending fortune
+          toast.info(
+            'Resuming pending fortune...',
+            {
+              description: `Your previous reading is ${fortune.aiStatus}. Please wait.`,
+              duration: 5000
+            }
+          )
+
+          // Note: We don't auto-resume polling here because we don't have the cards data
+          // User needs to wait for the polling to complete from the original session
+          // or refresh and check history page
+        }
+      } catch (error) {
+        console.error('[Reconnect] Failed to check pending fortune:', error)
+      }
+    }
+
+    checkPendingFortune()
+  }, [publicKey])
+
   // Open wallet connection modal
   const handleConnectWallet = () => {
     setVisible(true)
+  }
+
+  // Build cyberpunk prefix for interpretation with card orientations
+  const buildInterpretationPrefix = (
+    cards: Array<{ id: number; name: string; meaning: string; inverted?: boolean }>,
+    userQuery: string
+  ): string => {
+    const positions = ['PAST', 'PRESENT', 'FUTURE']
+
+    const cardLines = cards.map((card, index) => {
+      const orientation = card.inverted ? 'INVERTED' : 'UPRIGHT'
+      const position = positions[index]
+      return `  ${position}: ${card.name} (${orientation})`
+    }).join('\n')
+
+    let prefix = `█▓▒░ TRANSMISSION RECEIVED ░▒▓█\n\nCards drawn from the digital deck:\n${cardLines}`
+
+    if (userQuery.trim()) {
+      prefix += `\n\nQuery intercepted: "${userQuery.trim()}"`
+    }
+
+    prefix += `\n\n█▓▒░ DECRYPTING DATA ░▒▓█`
+
+    return prefix
+  }
+
+  // Poll for AI interpretation (triggered automatically by /api/fortune/update)
+  const pollForAIInterpretation = async (
+    draftId: number,
+    cards: Array<{ id: number; name: string; meaning: string; inverted?: boolean }>,
+    userQuery: string
+  ) => {
+    setIsLoadingInterpretation(true)
+
+    try {
+      console.log(`[AI] Polling for interpretation (draft ${draftId})...`)
+
+      // Poll DB for results (5 second interval, 2 minute timeout)
+      const pollStartTime = Date.now()
+      const POLL_INTERVAL = 2000 // 2s
+      const POLL_TIMEOUT = 120000 // 2 minutes
+
+      while (Date.now() - pollStartTime < POLL_TIMEOUT) {
+        // Wait before polling
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL))
+
+        // Check DB for results (by ID)
+        const fortuneResponse = await fetch(`/api/fortune/by-id/${draftId}`)
+        const fortuneData = await fortuneResponse.json()
+
+        if (!fortuneData.success) {
+          console.warn('[AI Poll] Failed to fetch fortune:', fortuneData.error)
+          continue
+        }
+
+        const fortune = fortuneData.fortune
+
+        // Check status
+        if (fortune.aiStatus === 'completed' && fortune.interpretation) {
+          // Success! Build prefix and show interpretation
+          console.log(`[AI Poll] ✅ Completed! Received ${fortune.interpretation.length} chars`)
+          const prefix = buildInterpretationPrefix(cards, userQuery)
+
+          setCurrentReading(prev => prev ? {
+            ...prev,
+            interpretation: `${prefix}\n\n${fortune.interpretation}`
+          } : null)
+
+          setIsLoadingInterpretation(false)
+          return
+        }
+
+        if (fortune.aiStatus === 'failed') {
+          // AI failed, use fallback
+          console.warn(`[AI Poll] AI failed:`, fortune.aiError)
+          throw new Error(fortune.aiError || 'AI generation failed')
+        }
+
+        // Still processing, continue polling
+        console.log(`[AI Poll] Status: ${fortune.aiStatus}, waiting...`)
+      }
+
+      // Timeout reached
+      console.error('[AI Poll] Timeout after 2 minutes')
+      throw new Error('AI generation timed out')
+
+    } catch (error: any) {
+      // Error or timeout - use fallback
+      console.error('[AI] Error, using fallback:', error.message)
+      const prefix = buildInterpretationPrefix(cards, userQuery)
+      setCurrentReading(prev => prev ? {
+        ...prev,
+        interpretation: `${prefix}\n\n${generateMockInterpretation(cards)}`
+      } : null)
+    } finally {
+      setIsLoadingInterpretation(false)
+    }
   }
 
   // Real blockchain implementation with controlled loading and DB integration
@@ -175,7 +309,7 @@ export default function HomePage() {
       }
 
       const draftData = await draftResponse.json()
-      draftId = draftData.draftId
+      draftId = (draftData.draftId as number) || 0
 
       // Step 1: Check Oracle status
       setLoadingState(prev => ({ ...prev, currentStep: 1 }))
@@ -260,13 +394,17 @@ export default function HomePage() {
         }
       )
 
+      // Show cards immediately with empty interpretation
       setCurrentReading({
         cards: selectedCards,
         timestamp: Date.now(),
-        interpretation: generateMockInterpretation(selectedCards),
+        interpretation: '', // Will be populated by AI or fallback
         signature: result.signature,
         fortuneNumber: fortuneNumber
       })
+
+      // Poll for AI interpretation (triggered automatically by /api/fortune/update)
+      pollForAIInterpretation(draftId, selectedCards, userQuery)
 
     } catch (error) {
       console.error('Fortune creation error:', error)
@@ -566,16 +704,35 @@ export default function HomePage() {
               ))}
             </div>
 
-            {/* TODO: remove after real AI/Oracle implementation - Oracle's Interpretation */}
+            {/* Oracle's Interpretation (AI or Fallback) */}
             <div className="max-w-3xl mx-auto mb-20 px-4">
               <div className="bg-cyber-surface/50 backdrop-blur border border-cyber-primary/30 rounded-lg p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <span className="text-2xl">🔮</span>
                   <h3 className="text-xl font-bold text-cyber-primary">Oracle&apos;s Interpretation</h3>
+                  {isLoadingInterpretation && (
+                    <span className="text-xs text-cyber-cyan animate-pulse">Consulting the AI Oracle...</span>
+                  )}
                 </div>
-                <p className="text-slate-300 leading-relaxed italic">
-                  {currentReading.interpretation}
-                </p>
+
+                {isLoadingInterpretation ? (
+                  /* Loading skeleton */
+                  <div className="space-y-3">
+                    <div className="h-4 bg-cyber-primary/20 rounded animate-pulse w-full"></div>
+                    <div className="h-4 bg-cyber-primary/20 rounded animate-pulse w-5/6"></div>
+                    <div className="h-4 bg-cyber-primary/20 rounded animate-pulse w-4/6"></div>
+                  </div>
+                ) : currentReading.interpretation ? (
+                  /* AI interpretation or fallback */
+                  <p className="text-slate-300 leading-relaxed italic whitespace-pre-wrap">
+                    {currentReading.interpretation}
+                  </p>
+                ) : (
+                  /* Empty state (shouldn't happen, but just in case) */
+                  <p className="text-slate-400 leading-relaxed italic">
+                    Preparing your interpretation...
+                  </p>
+                )}
               </div>
             </div>
 

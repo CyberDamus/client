@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { formatCardForAI } from '@/lib/tarot-cards'
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
@@ -129,6 +130,27 @@ export async function PATCH(req: NextRequest) {
       where: { id: draftId },
       data: updateData,
     })
+
+    // Trigger AI interpretation (fire-and-forget) if mint succeeded
+    if (status === 'pending_interpretation' && cards && Array.isArray(cards)) {
+      const apiUrl = process.env.NEXT_PUBLIC_APP_URL ||
+                     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+
+      fetch(`${apiUrl}/api/tarot/interpret`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draftId: updatedFortune.id,
+          cards: cards.map(formatCardForAI),
+          userQuery: updatedFortune.userQuery || ''
+        })
+      }).catch(err => {
+        console.error('[Fortune Update] AI trigger failed:', err)
+        // Don't throw - this is fire-and-forget
+      })
+
+      console.log(`[Fortune Update] 🤖 Triggered AI interpretation for draft ${draftId}`)
+    }
 
     return NextResponse.json({
       success: true,
