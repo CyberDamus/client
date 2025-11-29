@@ -131,25 +131,28 @@ export async function PATCH(req: NextRequest) {
       data: updateData,
     })
 
-    // Trigger AI interpretation (fire-and-forget) if mint succeeded
+    // Trigger AI interpretation if mint succeeded
     if (status === 'pending_interpretation' && cards && Array.isArray(cards)) {
       const apiUrl = process.env.NEXT_PUBLIC_APP_URL ||
                      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 
-      fetch(`${apiUrl}/api/tarot/interpret`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          draftId: updatedFortune.id,
-          cards: cards.map(formatCardForAI),
-          userQuery: updatedFortune.userQuery || ''
-        })
-      }).catch(err => {
-        console.error('[Fortune Update] AI trigger failed:', err)
-        // Don't throw - this is fire-and-forget
-      })
+      console.log(`[Fortune Update] Triggering AI: ${apiUrl}/api/tarot/interpret`)
 
-      console.log(`[Fortune Update] 🤖 Triggered AI interpretation for draft ${draftId}`)
+      try {
+        const res = await fetch(`${apiUrl}/api/tarot/interpret`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            draftId: updatedFortune.id,
+            cards: cards.map(formatCardForAI),
+            userQuery: updatedFortune.userQuery || ''
+          })
+        })
+        const data = await res.json()
+        console.log(`[Fortune Update] AI response:`, data)
+      } catch (err: any) {
+        console.error('[Fortune Update] AI trigger failed:', err.message)
+      }
     }
 
     return NextResponse.json({
