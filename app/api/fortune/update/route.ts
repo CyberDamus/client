@@ -136,10 +136,8 @@ export async function PATCH(req: NextRequest) {
       const apiUrl = process.env.NEXT_PUBLIC_APP_URL ||
                      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 
-      console.log(`[Fortune Update] Triggering AI: ${apiUrl}/api/tarot/interpret`)
-
       try {
-        const res = await fetch(`${apiUrl}/api/tarot/interpret`, {
+        await fetch(`${apiUrl}/api/tarot/interpret`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -148,10 +146,8 @@ export async function PATCH(req: NextRequest) {
             userQuery: updatedFortune.userQuery || ''
           })
         })
-        const data = await res.json()
-        console.log(`[Fortune Update] AI response:`, data)
-      } catch (err: any) {
-        console.error('[Fortune Update] AI trigger failed:', err.message)
+      } catch {
+        // AI trigger failed silently - polling will handle timeout
       }
     }
 
